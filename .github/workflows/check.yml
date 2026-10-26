@@ -1,0 +1,41 @@
+name: Check AI study preview
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Unit tests and syntax
+        run: |
+          python -m unittest discover -s tests -p 'test_ai_upgrade.py' -v
+          python -m py_compile ai_preview_app.py sdl_upgrade/*.py
+      - name: Render Streamlit view
+        run: |
+          python - <<'PY'
+          from streamlit.testing.v1 import AppTest
+          test = AppTest.from_file("ai_preview_app.py",default_timeout=30).run()
+          problems = [getattr(e, "message", str(e)) for e in test.exception]
+          assert not problems, problems
+          assert len(test.tabs) == 3, len(test.tabs)
+          print("All three learning screens rendered successfully")
+          PY
+      - name: Start Streamlit server
+        run: |
+          streamlit run ai_preview_app.py --server.headless true --server.port 8501 > /tmp/sdl_ai_preview.log 2>&1 &
+          for i in $(seq 1 25); do
+            if curl --fail --silent http://localhost:8501/_stcore/health; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sdl_ai_preview.log
+          exit 1
