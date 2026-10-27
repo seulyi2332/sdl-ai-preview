@@ -235,6 +235,15 @@ def goal_view(db,owner,client,model):
                 db.execute("UPDATE demo_goals SET state=? WHERE owner=? AND id=?",
                            ("done" if changed else "active",owner,goal["id"]))
                 st.rerun()
+            if st.session_state.get("goal_focus_id")==goal["id"]:
+                st.info("내 기록에서 선택한 목표와 자기평가예요.")
+                st.session_state.pop("goal_focus_id",None)
+            last_eval=latest_for_goal(db,owner,goal["id"])
+            if last_eval:
+                st.markdown("**최근 나의 자기평가: "+last_eval["evaluation"]+"**")
+                st.caption("평가일 "+last_eval["created"][:16]+" · 완료 체크와 별도로 기록됨")
+                if last_eval["memo"]:
+                    st.write("내가 작성한 판단 근거와 조정 생각: "+last_eval["memo"])
             linked=all_rows(db,"SELECT status FROM compass_tasks WHERE owner=? AND goal_id=? AND status!='숨김'",
                             (owner,goal["id"]))
             if linked:
