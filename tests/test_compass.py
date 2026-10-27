@@ -12,6 +12,7 @@ from compass_store import (connect,add_task,task_rows,change_task,add_material,
                            put_mark,marks,mark_status,material_rows,MARKS)
 from compass_pdf import extract_pdf,render_page
 from sdl_upgrade.strategies import CATALOG
+from compass_access import STUDENT_CODES,is_demo_access_code,study_id_label
 import fitz
 
 
@@ -76,10 +77,33 @@ class RenderTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_file(os.path.join(os.path.dirname(os.path.dirname(__file__)),"ai_preview_app.py"),default_timeout=40).run()
         self.assertFalse(app.exception,[e.message for e in app.exception])
+        self.assertTrue(any("접속 코드" in x.label for x in app.text_input))
+        app.text_input(key="participant_access_code").set_value("S01").run()
+        self.assertFalse(app.exception,[e.message for e in app.exception])
         self.assertTrue(any("할 일" in b.label for b in app.button))
         for page in ("목표와 계획","공부하기","학습일지","내 기록"):
             app.radio(key="compass_page").set_value(page).run()
             self.assertFalse(app.exception,[e.message for e in app.exception])
+
+
+class ParticipantCodeTests(unittest.TestCase):
+    def test_student_and_backup_codes(self):
+        self.assertEqual(len(STUDENT_CODES),12)
+        for i in range(1,13):
+            self.assertTrue(is_demo_access_code(f"S{i:02d}"))
+        for bad in ("S00","S13","S1","S100","", "S 01","../S01","s01","S01;DROP"):
+            self.assertFalse(is_demo_access_code(bad))
+        self.assertTrue(is_demo_access_code("DEMO01"))
+        self.assertFalse(is_demo_access_code("ADMIN"))
+        self.assertEqual("평가 참여자 S09",study_id_label("S09"))
+
+    def test_student_records_do_not_cross_codes(self):
+        conn=connect()
+        add_task(conn,"S01","학생 1 과제")
+        add_task(conn,"S02","학생 2 과제")
+        self.assertEqual(["학생 1 과제"],[r["title"] for r in task_rows(conn,"S01")])
+        self.assertEqual(["학생 2 과제"],[r["title"] for r in task_rows(conn,"S02")])
+        conn.close()
 
 
 if __name__=="__main__":
