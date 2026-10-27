@@ -23,8 +23,8 @@ def mock_client(data):
 
 
 class TestStrategy(unittest.TestCase):
-    def test_catalog_24(self):
-        self.assertEqual(24,len(CATALOG))
+    def test_expanded_catalog(self):
+        self.assertGreaterEqual(len(CATALOG),60)
         self.assertEqual(24,len({x["id"] for x in CATALOG}))
 
     def test_math_strategy(self):
