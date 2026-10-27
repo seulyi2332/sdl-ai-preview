@@ -142,7 +142,7 @@ def marks(db,owner,kind=None,include_hidden=False):
         query+=" AND m.kind=?"
         params.append(kind)
     if not include_hidden:
-        query+=" AND m.state!='hidden'"
+        query+=" AND m.state='active'"
     query+=" ORDER BY m.created DESC"
     return all_rows(db,query,tuple(params))
 
