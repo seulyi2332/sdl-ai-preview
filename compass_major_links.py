@@ -196,3 +196,26 @@ def record_exploration(db,owner):
                                   ("알게 된 점","learned"),("더 알아볼 점","next_question"),
                                   ("다음 탐색 활동","next_action")]:
                     if item[key]:st.write("**"+label+"**: "+item[key][:430])
+
+
+
+def home_exploration(db,owner):
+    """Only show a compact contextual prompt after a learner saved a study link."""
+    data=linked_rows(db,owner,limit=1)
+    if not data: return
+    latest=data[0]
+    with st.container(border=True):
+        st.caption("🌿 교과목에서 시작한 나의 전공 및 진로 탐색")
+        st.markdown("**"+(latest["question"] or latest["topic"] or latest["interest"])[:140]+"**")
+        if latest["major"]:
+            st.caption("관심 분야: "+latest["major"][:100])
+        if latest["next_action"]:
+            st.caption("내가 정한 다음 탐색: "+latest["next_action"][:200])
+        a,b=st.columns(2)
+        if a.button("수업내용에서 더 탐색하기",key="home_major_study"):
+            st.session_state["study_topic"]=latest["topic"]
+            st.session_state["_compass_go"]="공부하기"
+            st.rerun()
+        if b.button("알게 된 점 돌아보기",key="home_major_reflection"):
+            st.session_state["_compass_go"]="학습일지"
+            st.rerun()
