@@ -3,7 +3,7 @@ import json
 import html
 import streamlit as st
 from compass_pdf import extract_pdf,render_page
-from compass_store import (all_rows,material_rows,get_material,add_material,
+from compass_store import (all_rows,material_rows,get_material,add_material,interest_for,
                            put_mark,put_chat,chat_messages,ident,now)
 from sdl_upgrade.strategies import StudyContext,recommend
 from sdl_upgrade.ai import suggest_strategies
@@ -201,7 +201,7 @@ def conversation(db,owner,client,model,course,topic,excerpt):
         else:
             try:
                 with st.spinner("질문에 맞게 설명하고 있어요"):
-                    reply=answer(client,model,course,topic,q,hist,excerpt)
+                    reply=answer(client,model,course,topic,q,hist,excerpt,interest=interest_for(db,owner))
                 put_chat(db,owner,course,"user",q)
                 put_chat(db,owner,course,"assistant",reply)
                 st.rerun()
