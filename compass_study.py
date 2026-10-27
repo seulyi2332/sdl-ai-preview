@@ -160,10 +160,9 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
     if st.session_state.get("study_strategy_ctx")!=snapshot:
         st.session_state["study_strategy_ctx"]=snapshot
         st.session_state.pop("study_strategies",None)
-        # Keep an explicit learner choice through the next widget rerun, but
-        # do not keep a prior AI recommendation for a different study context.
-        if not st.session_state.get("study_strategy_self_card"):
-            st.session_state.pop("study_strategy_selected",None)
+        # A changed course, difficulty or topic starts a new strategy choice.
+        st.session_state.pop("study_strategy_selected",None)
+        st.session_state.pop("study_strategy_self_card",None)
     if st.button("내 공부 방법 추천받기",type="primary",key="study_recommend"):
         st.session_state.pop("study_strategy_self_card",None)
         if client:
@@ -192,10 +191,11 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
             with st.expander("진행 방법"):
                 for j,step in enumerate(card["steps"],1):
                     st.markdown(f"{j}. {step}")
-            if st.button("이 방법 해보기",key="study_pick_"+card["id"],type="primary",use_container_width=True):
+            if self_card:
+                st.caption("✓ 내가 직접 선택했어요. 아래에서 바로 수행해 봐요.")
+            elif st.button("이 방법 해보기",key="study_pick_"+card["id"],type="primary",use_container_width=True):
                 st.session_state["study_strategy_selected"]=card["id"]
-                if not self_card:
-                    log_strategy_choice(db,owner,course,topic,card["id"],"ai_suggestion")
+                log_strategy_choice(db,owner,course,topic,card["id"],"ai_suggestion")
                 st.rerun()
     chosen=next((c for c in cards if c["id"]==st.session_state.get("study_strategy_selected")),None)
     if not chosen:
