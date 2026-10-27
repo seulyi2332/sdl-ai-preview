@@ -29,11 +29,11 @@ def recent(db,owner,course=None,limit=4):
     ensure(db)
     if course:
         rows=all_rows(db,"""SELECT * FROM compass_strategy_choices
-           WHERE owner=? AND course=? ORDER BY created DESC,id DESC LIMIT ?""",
+           WHERE owner=? AND course=? ORDER BY created DESC,rowid DESC LIMIT ?""",
            (owner,course,limit))
     else:
         rows=all_rows(db,"""SELECT * FROM compass_strategy_choices
-           WHERE owner=? ORDER BY created DESC,id DESC LIMIT ?""",(owner,limit))
+           WHERE owner=? ORDER BY created DESC,rowid DESC LIMIT ?""",(owner,limit))
     catalog={s["id"]:s for s in CATALOG}
     return [{**r,"name":catalog[r["strategy_id"]]["name"]}
             for r in rows if r["strategy_id"] in catalog]
