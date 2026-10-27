@@ -91,7 +91,7 @@ def run():
         for k in list(st.session_state):
             if k not in ("_active_owner","compass_page","_compass_go"):
                 # clear widget state and pending AI drafts between codes, never share drafts
-                if k.startswith(("study_","pdf_","mark_","strat_","chosen_","diary_","brief_","chat_","goal_","task_","pdfopt_","home_","board_","marks_","selfcheck_","_study_")):
+                if k.startswith(("study_","pdf_","mark_","strat_","chosen_","diary_","brief_","chat_","goal_","task_","pdfopt_","home_","board_","marks_","selfcheck_","_study_","major_")):
                     st.session_state.pop(k,None)
         st.session_state["_active_owner"]=owner
     db=connect()
