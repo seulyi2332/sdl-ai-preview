@@ -326,9 +326,10 @@ def study_view(db,owner,client,model):
                         placeholder="예: 심리학개론")
     topic=b.text_input("오늘 공부할 주제",key="study_topic",
                        placeholder="예: 기억과 학습")
+    st.markdown("### 🌿 전공 및 진로 탐색")
+    study_exploration(db,owner,client,model,course,topic)
     with st.expander("📚 내 학습자료 읽기, 연속 스크롤 및 드래그 표시",expanded=True):
         excerpt=pdf_study(db,owner)
-    study_exploration(db,owner,client,model,course,topic)
     st.divider()
     strategy_and_practice(db,owner,client,model,course,topic,excerpt)
     st.divider()
