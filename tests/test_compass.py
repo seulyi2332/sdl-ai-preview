@@ -101,11 +101,11 @@ class RenderTests(unittest.TestCase):
         buttons[0].click().run()
         fields={field.label:field for field in app.text_area}
         if "내가 직접 해 본 내용" in fields:
-            fields["내가 직접 해 본 내용"].set_value("오늘 배운 개념을 예를 들어 설명했어요.").run()
+            fields["내가 직접 해 본 내용"].set_value("오늘 배운 개념을 예를 들어 설명했어요.")
         elif "내 풀이 과정" in fields:
-            fields["내 풀이 과정"].set_value("문제의 조건을 먼저 찾아보았어요.").run()
+            fields["내 풀이 과정"].set_value("문제의 조건을 먼저 찾아보았어요.")
         else:
-            fields["첫 개념의 특징"].set_value("두 개념의 차이를 구분했어요.").run()
+            fields["첫 개념의 특징"].set_value("두 개념의 차이를 구분했어요.")
         save=next(b for b in app.button if b.label=="내 학습기록에 저장")
         save.click().run()
         self.assertFalse(app.exception,[x.message for x in app.exception])
