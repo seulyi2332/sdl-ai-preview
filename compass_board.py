@@ -1,7 +1,7 @@
 """A compact task Kanban and goal map. Task completion is not goal achievement."""
 import html
 import streamlit as st
-from compass_store import all_rows,task_rows,add_task,change_task,ident,now,STATES
+from compass_store import all_rows,task_rows,add_task,change_task,ident,now,STATES,interest_for,save_interest
 
 VISIBLE=STATES[:4]
 LABELS={"시작 전":"○ 시작 전","진행 중":"◐ 진행 중",
@@ -119,7 +119,9 @@ def home_view(db,owner,client,model):
           WHERE owner=? AND state='active' AND kind IN ('흥미','어려움')
           ORDER BY created DESC LIMIT 2""",(owner,))
     if diary or highlights:
-        st.markdown("### 내가 남긴 학습의 흔적")
+        if interest_for(db,owner):
+        st.caption("🌿 내가 설정한 관심 분야: "+interest_for(db,owner))
+    st.markdown("### 내가 남긴 학습의 흔적")
         left,right=st.columns(2,gap="medium")
         with left.container(border=True):
             st.markdown("**✍️ 최근 학습일지**")
@@ -155,7 +157,7 @@ def home_view(db,owner,client,model):
                 st.error("실제 AI 연결이 설정되지 않았어요.")
             else:
                 try:
-                    reply=answer(client,model,"오늘의 학습","",question,past)
+                    reply=answer(client,model,"오늘의 학습","",question,past,interest=interest_for(db,owner))
                     put_chat(db,owner,"오늘","user",question)
                     put_chat(db,owner,"오늘","assistant",reply)
                     st.rerun()
@@ -166,6 +168,15 @@ def home_view(db,owner,client,model):
 def goal_view(db,owner,client,model):
     st.markdown("### 목표와 계획")
     st.caption("큰 방향과 이번에 해 볼 목표를 직접 정해요. 할 일 완료와 목표 도달 자기평가는 구분해요.")
+    with st.expander("🌿 교과목 학습과 나의 관심 전공 연결하기 · 선택",expanded=False):
+        current=interest_for(db,owner)
+        st.caption("전공 추천이나 적합도 진단이 아니에요. 내가 선택한 관심 분야만 AI 설명의 맥락으로 활용해요.")
+        with st.form("interest_form"):
+            majors=st.text_input("관심 있는 전공이나 분야",value=current,placeholder="예: 심리학, 사회복지학 또는 아직 고민 중")
+            if st.form_submit_button("내 관심 분야 저장"):
+                save_interest(db,owner,majors)
+                st.success("내가 입력한 관심 분야를 저장했어요.")
+    st.caption("관심 전공 정보가 없어도 모든 기능을 이용할 수 있어요.")
     goals=active_goals(db,owner)
     if not goals:
         st.info("설정한 목표가 없어도 바로 학습을 시작할 수 있어요.")
