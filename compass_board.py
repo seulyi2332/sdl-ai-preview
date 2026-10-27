@@ -4,6 +4,7 @@ import streamlit as st
 from compass_store import all_rows,task_rows,add_task,change_task,ident,now,STATES,interest_for,save_interest
 from compass_progress import criterion_for,save_criterion,save_time,latest_time,revise_goal,adjustments
 from compass_major_links import goal_exploration
+from compass_selfcheck_links import latest_for_goal
 
 VISIBLE=STATES[:4]
 LABELS={"시작 전":"○ 시작 전","진행 중":"◐ 진행 중",
