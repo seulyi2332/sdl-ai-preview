@@ -50,7 +50,7 @@ def pdf_study(db,owner):
     st.caption(f"총 {pages}쪽 · 읽을 수 있는 문단 {len(paragraphs)}개")
     if not paragraphs:
         st.warning("텍스트를 추출하지 못한 PDF예요. 스캔한 이미지 PDF일 수 있어요. 화면에서 읽을 수 있지만 AI에 자료 내용이 자동 전달되지는 않아요.")
-    st.caption("원본 PDF를 아래로 스크롤하며 본문의 글을 드래그해서 표시할 수 있어요.")
+    st.caption("원본 PDF에서 글자를 드래그하면 그 위치에 색상 선택 메뉴가 나타나요. 어려움, 흥미, 핵심, 질문 중 내가 선택한 색으로 표시돼요.")
     saved=db.execute("""SELECT * FROM compass_marks
         WHERE owner=? AND material_id=? AND state='active'
         ORDER BY created DESC""",(owner,chosen)).fetchall()
@@ -61,7 +61,14 @@ def pdf_study(db,owner):
             page=int(token.split("-")[1]) if token.startswith("drag-") else int(token.split("-")[0].lstrip("p"))
         except (ValueError,IndexError):
             page=0
-        saved_overlay.append({"page":page,"text":m["text"]})
+        try:
+            rectangles=json.loads(m["geometry"] or "[]")
+            if not isinstance(rectangles,list):
+                rectangles=[]
+        except (ValueError,TypeError,KeyError):
+            rectangles=[]
+        saved_overlay.append({"page":page,"text":m["text"],
+                              "kind":m["kind"],"rects":rectangles})
     if not component_available():
         st.warning("현재 Streamlit 버전에서는 PDF 드래그 구성요소를 사용할 수 없어 문단 선택을 제공해요.")
     else:
@@ -83,7 +90,8 @@ def pdf_study(db,owner):
                     if readable_ratio(excerpt)<0.65:
                         st.warning("이 PDF에서 선택한 글자 정보가 깨져 있어 표시를 저장하지 않았어요. PDF를 다시 저장하거나 아래 문단 선택으로 시도해 주세요.")
                     else:
-                        put_mark(db,owner,chosen,selection_key(pg,excerpt),kind,excerpt)
+                        put_mark(db,owner,chosen,selection_key(pg,excerpt),kind,excerpt,
+                                 geometry=selection.get("rects"))
                         st.session_state["study_chat_excerpt"]=excerpt
                         if kind=="어려움":
                             st.session_state["study_difficulty"]="내가 어렵다고 표시한 글: "+excerpt[:350]
