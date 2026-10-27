@@ -101,7 +101,7 @@ def run():
         st.session_state["compass_page"]=target
     st.markdown('<div class="smallcaps">MY LEARNING COMPASS</div>',unsafe_allow_html=True)
     st.title("나의 학습나침반")
-    st.caption("업데이트 2026-10-27d · 학습일기 한 칸에서 AI 이어 묻기")
+    st.caption("업데이트 2026-10-27e · 학습일기 대화, 단계별 도움, 자기평가 기록 연계")
     st.radio("이동",MENU,key="compass_page",horizontal=True,label_visibility="collapsed")
     st.divider()
     page=st.session_state["compass_page"]
