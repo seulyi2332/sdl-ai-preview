@@ -105,11 +105,16 @@ export default function ({parentElement,data,setTriggerValue}) {
   const marked=Array.isArray(data.marks)?data.marks:[];
 
   // Replace children of this data placeholder only, never parentElement.innerHTML.
+  // Preserve the reader position when a Streamlit widget changes elsewhere.
+  const sameDocument=viewport.dataset.documentId===documentId;
+  const previousScroll=sameDocument?viewport.scrollTop:null;
   viewport.replaceChildren();
+  viewport.dataset.documentId=documentId;
   for(const pg of pages) {
     const wrapper=document.createElement("div");
     wrapper.className="pdf-page";
     wrapper.dataset.page=String(pg.page);
+    wrapper.style.aspectRatio=pg.width+" / "+pg.height;
     const img=document.createElement("img");
     img.src=pg.image;
     img.alt="PDF "+pg.page+"쪽";
@@ -138,7 +143,11 @@ export default function ({parentElement,data,setTriggerValue}) {
     wrapper.append(img,layer,badge);
     viewport.appendChild(wrapper);
   }
-  if(Number.isFinite(data.scroll) && data.scroll>=0) viewport.scrollTop=data.scroll;
+  if(previousScroll!==null) {
+    viewport.scrollTop=previousScroll;
+  } else if(Number.isFinite(data.scroll) && data.scroll>=0) {
+    viewport.scrollTop=data.scroll;
+  }
 
   function clearSelection() {
     selected=null;
@@ -212,3 +221,18 @@ def show_pdf_reader(raw,material_id,saved_marks,scroll=0,key="compass_pdf_reader
 def selection_key(page,selected_text):
     normalized=" ".join(selected_text.split())
     return "drag-"+str(page)+"-"+hashlib.sha256(normalized.encode("utf8")).hexdigest()[:18]
+
+
+
+def readable_ratio(text):
+    """Reuse the PDF legibility check validated in the older Claude prototype.
+
+    A damaged embedded font can yield nonsense even when a text selection exists.
+    The check only decides whether the selected quotation is trustworthy.
+    """
+    import re
+    if not text:
+        return 0.0
+    allowed=len(re.findall(
+        r"""[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9\s.,;:!?()\[\]{}'"“”‘’·\-–—~%/+=<>*&#@^_|°×÷…→←↑↓①-⑳ⅠⅡⅢ•▪●■□○◦]""",text))
+    return allowed/len(text)
