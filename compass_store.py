@@ -178,7 +178,7 @@ def mark_status(db,owner,mid,status):
 
 
 def chat_messages(db,owner,course="",limit=10):
-    data=all_rows(db,"SELECT role,text FROM compass_chat WHERE owner=? AND course=? ORDER BY created DESC,id DESC LIMIT ?",
+    data=all_rows(db,"SELECT role,text FROM compass_chat WHERE owner=? AND course=? ORDER BY created DESC,rowid DESC LIMIT ?",
                   (owner,course,limit))
     return list(reversed(data))
 
