@@ -6,6 +6,7 @@ on:
       - dev/evaluation-codes-20261027
       - dev/compass-principles-20261027
       - dev/independent-learning-20261027
+      - dev/pdf-floating-color-menu-20261027
   workflow_dispatch:
 jobs:
   compass:
