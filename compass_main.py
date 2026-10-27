@@ -69,7 +69,7 @@ def run():
     with st.sidebar:
         st.markdown("## 🧭 나의 학습나침반")
         st.caption("내가 목표를 정하고 공부하며 돌아보는 공간")
-        owner=st.text_input("접속 코드",value="",placeholder="예: S01",max_chars=40,key="participant_access_code")
+        owner=st.text_input("접속 코드",value="",placeholder="예: S01",max_chars=40,key="participant_access_code").strip().upper()
         st.caption("학생은 안내받은 S01~S09 중 자기 코드만 입력하세요. S10~S12는 예비용입니다.")
         st.divider()
         st.caption("AI는 근거와 선택지를 제공해요. 목표, 수행, 점검, 조정은 내가 결정해요.")
