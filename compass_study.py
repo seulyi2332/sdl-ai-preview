@@ -9,6 +9,7 @@ from sdl_upgrade.strategies import StudyContext,recommend
 from sdl_upgrade.ai import suggest_strategies
 from sdl_upgrade.model_client import safe_error_message
 from compass_chat import answer
+from compass_feedback import make_feedback
 
 KIND_TIP={"어려움":"이해가 어렵거나 다시 보고 싶은 문장",
           "흥미":"관심이 가거나 더 알고 싶은 내용",
@@ -140,6 +141,7 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
         return
     with st.container(border=True):
         st.markdown("### 직접 해 보기 · "+chosen["name"])
+        st.caption("내가 먼저 풀거나 설명한 뒤 원하는 경우 AI 피드백을 받을 수 있어요.")
         if chosen.get("task_prompt"):
             st.info(chosen["task_prompt"])
         else:
@@ -171,11 +173,17 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
             saved=st.form_submit_button("내 학습기록에 저장",type="primary")
         if saved:
             if attempt:
+                activity_id=ident()
+                saved_work={"work":work,"student_selfcheck":selfcheck,
+                            "method_name":chosen["name"],"context_difficulty":difficulty}
                 db.execute("INSERT INTO demo_practice VALUES(?,?,?,?,?,?,?)",
-                           (ident(),owner,course,topic,chosen["id"],
-                            json.dumps({"work":work,"student_selfcheck":selfcheck,
-                                        "method_name":chosen["name"],
-                                        "context_difficulty":difficulty},ensure_ascii=False),now()))
+                           (activity_id,owner,course,topic,chosen["id"],
+                            json.dumps(saved_work,ensure_ascii=False),now()))
+                st.session_state["study_last_work"]={
+                   "id":activity_id,"owner":owner,"course":course,"topic":topic,
+                   "strategy":chosen["id"],"strategy_name":chosen["name"],
+                   "work":work,"excerpt":(st.session_state.get("study_chat_excerpt") or excerpt)[:4800]}
+                st.session_state.pop("study_last_feedback",None)
                 st.success("내가 직접 수행한 내용을 저장했어요.")
             else:
                 st.warning("실제 수행한 내용을 먼저 적어 주세요.")
@@ -184,6 +192,38 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
                 st.markdown(f"{i}. {step}")
             if chosen.get("example"):
                 st.info(chosen["example"])
+    activity=st.session_state.get("study_last_work") or {}
+    if activity.get("owner")==owner and activity.get("strategy")==chosen["id"]:
+        with st.container(border=True):
+            st.markdown("#### 내가 직접 작성한 답에 대한 AI 도움 · 선택")
+            st.caption("작성한 답을 토대로 구체적인 보완점과 근거를 설명해요. 자동 채점이나 목표 성취 판단은 하지 않아요.")
+            last=db.execute("SELECT id FROM demo_practice WHERE owner=? AND id=?",
+                            (owner,activity["id"])).fetchone()
+            if last:
+                help_level=st.selectbox("어떤 도움을 받고 싶나요? (선택)",
+                     ["구체적으로 잘된 점과 보완점","정답을 바로 말하기보다 단서부터",
+                      "필요한 개념과 예시 자세히"],key="study_feedback_mode")
+                if st.button("내 답에 AI 피드백 받기",key="study_feedback_btn",type="primary"):
+                    if not client:
+                        st.warning("실제 AI 키가 연결되어 있지 않아요. 저장한 내 답은 그대로 남아 있어요.")
+                    else:
+                        try:
+                            with st.spinner("내가 직접 작성한 답을 살펴보고 있어요"):
+                                feedback=make_feedback(client,model,activity["course"],activity["topic"],
+                                    activity["strategy_name"],activity["work"],activity["excerpt"],help_level)
+                            db.execute("""CREATE TABLE IF NOT EXISTS compass_feedback_log(
+                                 id TEXT PRIMARY KEY,owner TEXT NOT NULL,activity_id TEXT NOT NULL,
+                                 feedback TEXT NOT NULL,help_mode TEXT NOT NULL,created TEXT NOT NULL)""")
+                            db.execute("INSERT INTO compass_feedback_log VALUES(?,?,?,?,?,?)",
+                                (ident(),owner,activity["id"],feedback,help_level,now()))
+                            st.session_state["study_last_feedback"]=feedback
+                        except Exception as e:
+                            st.error("AI 피드백에 문제가 생겼어요. "+safe_error_message(e))
+                feedback=st.session_state.get("study_last_feedback")
+                if feedback:
+                    st.success("AI가 학생의 수행 내용을 참고해 만든 피드백이에요.")
+                    st.write(feedback)
+                    st.caption("AI의 설명이 강의내용과 다른지 직접 확인하고, 다시 시도하거나 다른 방법을 선택할 수 있어요.")
     if st.button("다른 학습전략 고르기",key="study_pick_again"):
         st.session_state.pop("study_strategy_selected",None)
         st.rerun()
