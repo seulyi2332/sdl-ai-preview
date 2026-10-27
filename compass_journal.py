@@ -54,6 +54,14 @@ def journal_form(db,owner,client,model):
         times=time_summaries(db,owner,limit=3)
         if not examples and not times:
             st.caption("기록이 없어도 일기를 자유롭게 쓸 수 있어요.")
+        log_table=db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='compass_feedback_log'").fetchone()
+        if log_table:
+            feedbacks=all_rows(db,"""SELECT feedback,created FROM compass_feedback_log
+                              WHERE owner=? ORDER BY created DESC LIMIT 2""",(owner,))
+            if feedbacks:
+                st.caption("내가 요청했던 AI 학습 피드백 (참고)")
+                for f in feedbacks:
+                    st.write(f["feedback"][:430])
         for m in examples:
             st.caption("● 내가 표시한 "+m["kind"]+" · "+m["title"])
             st.write(m["text"][:350])
@@ -68,7 +76,22 @@ def journal_form(db,owner,client,model):
         st.caption("이 기록은 참고자료예요. 학습일지에 무엇을 쓸지는 내가 결정해요.")
     text=st.text_area("오늘의 공부 이야기",key="diary_story",height=210,
       placeholder="오늘 무엇을 공부했나요?\n어떤 부분이 도움이 됐고 무엇이 어려웠나요?\n흥미로웠던 주제나 다음에 해 보고 싶은 공부가 있다면 편하게 적어 보세요.")
-    if st.button("AI에게 오늘의 브리핑 부탁하기",key="diary_analyze",type="primary"):
+    diary_controls=st.columns([1,1.6])
+    if diary_controls[0].button("내 일지만 저장",key="diary_save_direct"):
+        if text.strip():
+            existing=db.execute("""SELECT id FROM demo_diaries
+                 WHERE owner=? AND original=? AND briefing='' ORDER BY created DESC LIMIT 1""",
+                 (owner,text.strip())).fetchone()
+            if existing:
+                st.info("이미 같은 내용의 일기를 저장했어요. 지난 학습일지에서 확인할 수 있어요.")
+            else:
+                db.execute("""INSERT INTO demo_diaries
+                     (id,owner,original,briefing,analysis,created) VALUES(?,?,?,?,?,?)""",
+                     (ident(),owner,text.strip(),"","{}",now()))
+                st.success("AI 브리핑 없이 내가 쓴 일기를 그대로 저장했어요.")
+        else:
+            st.warning("일기에 오늘의 이야기를 먼저 작성해 주세요.")
+    if diary_controls[1].button("AI에게 오늘의 브리핑 부탁하기",key="diary_analyze",type="primary"):
         if not text.strip():
             st.warning("먼저 오늘 공부한 이야기를 적어 주세요.")
         elif not client:
