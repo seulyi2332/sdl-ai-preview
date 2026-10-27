@@ -6,8 +6,8 @@ from compass_store import all_rows,marks,mark_status,material_rows,get_material
 from compass_journal import rows_for_diary
 from compass_independence import recent as recent_strategy_choices
 
-COLORS={"어려움":("#fff0ea","#a14c2b"),"흥미":("#eff4ff","#355fa8"),
-        "핵심":("#fff9df","#8b6d17"),"질문":("#ebf7f0","#226e54")}
+COLORS={"어려움":("#ffd1d4","#873b44"),"흥미":("#cfe3ff","#305889"),
+        "핵심":("#ffefab","#75591c"),"질문":("#c8f0d9","#246b49")}
 
 
 def marked_section(db,owner,client,model):
