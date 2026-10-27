@@ -1,0 +1,227 @@
+"""PDF reading, passage marking, context strategies, direct practice and AI study chat."""
+import json
+import html
+import streamlit as st
+from compass_pdf import extract_pdf,render_page
+from compass_store import (all_rows,material_rows,get_material,add_material,
+                           put_mark,put_chat,chat_messages,ident,now)
+from sdl_upgrade.strategies import StudyContext,recommend
+from sdl_upgrade.ai import suggest_strategies
+from sdl_upgrade.model_client import safe_error_message
+from compass_chat import answer
+
+KIND_TIP={"어려움":"이해가 어렵거나 다시 보고 싶은 문장",
+          "흥미":"관심이 가거나 더 알고 싶은 내용",
+          "핵심":"학습의 핵심이라고 내가 고른 내용",
+          "질문":"나중에 확인하거나 질문하고 싶은 내용"}
+
+
+def pdf_study(db,owner):
+    """Upload -> read actual PDF page image -> mark chosen extracted paragraph."""
+    st.markdown("### 강의자료에서 공부하기")
+    st.caption("PDF를 읽고 내가 어렵거나 흥미롭게 느낀 문장을 표시할 수 있어요. AI가 자동으로 흥미를 판정하지 않아요.")
+    uploaded=st.file_uploader("PDF 업로드",type=["pdf"],key="study_upload")
+    if uploaded and st.button("이 자료를 내 자료함에 저장",key="study_upload_save"):
+        try:
+            data=uploaded.getvalue()
+            paragraphs,pages=extract_pdf(data)
+            title=uploaded.name[:150]
+            mid=add_material(db,owner,title,data,paragraphs,pages)
+            st.session_state["_study_pdf_next"]=mid
+            st.success("PDF를 저장했어요. 다음 화면에서 이 자료를 볼 수 있어요.")
+            st.rerun()
+        except Exception as e:
+            st.error(str(e) if isinstance(e,ValueError) else "PDF를 열 수 없어요. 다른 파일을 사용해 주세요.")
+    docs=material_rows(db,owner)
+    if not docs:
+        st.info("PDF가 없어도 아래에서 교과목과 고민을 적고 학습전략 및 AI 도움을 받을 수 있어요.")
+        return ""
+    ids=[d["id"] for d in docs]
+    if st.session_state.get("_study_pdf_next") in ids:
+        st.session_state["study_pdf_selection"]=st.session_state.pop("_study_pdf_next")
+    chosen=st.selectbox("내 학습자료",ids,format_func=lambda mid:next(d["title"] for d in docs if d["id"]==mid),
+                        key="study_pdf_selection")
+    material=get_material(db,owner,chosen)
+    paragraphs=json.loads(material["paragraphs"])
+    pages=int(material["page_count"])
+    st.caption(f"총 {pages}쪽 · 읽을 수 있는 문단 {len(paragraphs)}개")
+    if not paragraphs:
+        st.warning("텍스트를 추출하지 못한 PDF예요. 스캔한 이미지 PDF일 수 있어요. 화면에서 읽을 수 있지만 AI에 자료 내용이 자동 전달되지는 않아요.")
+    page_no=st.number_input("보고 싶은 쪽",min_value=1,max_value=max(pages,1),
+                            value=1,step=1,key="study_pdf_page")
+    image_col,text_col=st.columns([1.15,1],gap="large")
+    with image_col:
+        try:
+            st.image(render_page(material["pdf"],page_no,width=880),caption=f"원본 자료 · {page_no}쪽",
+                     use_container_width=True)
+        except Exception:
+            st.warning("이 쪽의 미리보기를 열지 못했어요.")
+        st.download_button("원본 PDF 다운로드",data=material["pdf"],file_name=material["title"],mime="application/pdf",
+                           key="download_pdf_"+chosen)
+    with text_col:
+        pg=[p for p in paragraphs if p["page"]==page_no]
+        st.markdown("#### 표시할 문단 고르기")
+        if not pg:
+            st.caption("이 쪽에는 읽을 수 있는 텍스트가 없어요. 필요한 문구를 직접 질문으로 입력할 수 있어요.")
+            return ""
+        options=[p["id"] for p in pg]
+        selected=st.selectbox("문단",options,key="study_para",
+                              format_func=lambda pid:next(p["text"][:85] for p in pg if p["id"]==pid))
+        paragraph=next(p for p in pg if p["id"]==selected)
+        st.markdown("> "+paragraph["text"][:1600].replace("\n","\n> "))
+        kind=st.radio("이 문단을 어떻게 표시할까요?",list(KIND_TIP),key="study_mark_kind",
+                      horizontal=True,help="내가 선택하는 표시예요.")
+        note=st.text_input("이 문단에 남길 메모 (선택)",key="study_mark_note",
+                           placeholder="예: 이 개념을 다른 전공에서는 어떻게 쓰지?")
+        if st.button("문단 표시 저장",key="study_mark_save",type="primary"):
+            put_mark(db,owner,chosen,selected,kind,paragraph["text"],note)
+            st.success(f"'{kind}'로 표시했어요. 내 기록에서 분류별로 다시 볼 수 있어요.")
+        if st.button("이 문단을 AI와 공부하기",key="study_to_chat"):
+            st.session_state["study_chat_question"]="이 문단이 이해가 안 돼요. 핵심을 쉽게 설명하고 구체적인 예시를 들어 주세요."
+            st.session_state["study_chat_excerpt"]=paragraph["text"]
+            st.info("아래 AI 대화에서 이 문단을 참고해 설명을 요청할 수 있어요.")
+        return paragraph["text"]
+
+
+def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
+    st.markdown("### 내 상황에 맞는 공부 방법")
+    st.caption("24가지 방법을 전부 고르는 대신, 교과목 및 어려움에 맞는 방법 2~3개와 실행 절차를 보여줘요.")
+    difficulty=st.text_area("지금 공부하면서 막히는 점",key="study_difficulty",height=86,
+                             placeholder="예: 심리학 이론이 비슷해서 구분하기 어려워요.")
+    task=st.text_input("어떤 활동을 해 보고 싶나요? (선택)",key="study_task",
+                        placeholder="예: 개념 차이 비교, 예제 풀이, 암기 후 점검")
+    ctx=StudyContext(course=course,topic=topic,difficulty=difficulty,
+                     task=task,material_excerpt=excerpt[:1800])
+    snapshot=(owner,course,topic,difficulty,task,excerpt[:500])
+    if st.session_state.get("study_strategy_ctx")!=snapshot:
+        st.session_state["study_strategy_ctx"]=snapshot
+        st.session_state.pop("study_strategies",None)
+        st.session_state.pop("study_strategy_selected",None)
+    if st.button("내 공부 방법 추천받기",type="primary",key="study_recommend"):
+        if client:
+            try:
+                with st.spinner("학습 내용과 어려움에 맞는 방법을 찾고 있어요"):
+                    results=suggest_strategies(ctx,client,model)
+                st.session_state["study_strategies"]=results
+                st.session_state["study_strategy_info"]="실제 AI가 방법을 구성했어요."
+            except Exception as exc:
+                st.session_state["study_strategies"]=recommend(ctx)
+                st.session_state["study_strategy_info"]="AI 응답 실패 · 학습전략 카탈로그 안내 ("+safe_error_message(exc)+")"
+        else:
+            st.session_state["study_strategies"]=recommend(ctx)
+            st.session_state["study_strategy_info"]="카탈로그 기반 안내 · 실제 AI 응답이 아니에요."
+    cards=st.session_state.get("study_strategies") or []
+    if not cards:
+        return
+    st.caption(st.session_state.get("study_strategy_info",""))
+    cols=st.columns(len(cards),gap="small")
+    for i,card in enumerate(cards):
+        with cols[i].container(border=True):
+            st.markdown("#### "+card["name"])
+            st.write(card["reason"])
+            with st.expander("진행 방법"):
+                for j,step in enumerate(card["steps"],1):
+                    st.markdown(f"{j}. {step}")
+            if st.button("이 방법 해보기",key="study_pick_"+card["id"],type="primary",use_container_width=True):
+                st.session_state["study_strategy_selected"]=card["id"]
+                st.rerun()
+    chosen=next((c for c in cards if c["id"]==st.session_state.get("study_strategy_selected")),None)
+    if not chosen:
+        return
+    with st.container(border=True):
+        st.markdown("### 직접 해 보기 · "+chosen["name"])
+        if chosen.get("task_prompt"):
+            st.info(chosen["task_prompt"])
+        else:
+            st.caption("내가 내용을 작성하고 필요한 경우에만 예시를 펼쳐봐요.")
+        with st.form("study_practice_form",clear_on_submit=True):
+            if chosen["kind"]=="comparison":
+                a,b=st.columns(2)
+                ca=a.text_input("첫 개념 또는 사례",placeholder="예: 단기기억")
+                cb=b.text_input("비교할 개념 또는 사례",placeholder="예: 장기기억")
+                criteria=st.text_input("비교 기준",value="정의, 차이, 예시")
+                a,b=st.columns(2)
+                ta=a.text_area("첫 개념의 특징",height=120)
+                tb=b.text_area("두 번째 개념의 특징",height=120)
+                work={"left":ca,"right":cb,"criteria":criteria,"left_work":ta,"right_work":tb}
+                attempt=bool(ta.strip() or tb.strip())
+            elif chosen["kind"]=="solve":
+                q=st.text_area("문제 및 조건",height=80)
+                a=st.text_area("내 풀이 과정",height=140)
+                work={"question":q,"answer":a}
+                attempt=bool(a.strip())
+            else:
+                response=st.text_area("내가 직접 해 본 내용",height=180,
+                                      placeholder="설명, 회상, 관점 비교, 학습계획 등의 내용을 적어 보세요.")
+                work={"response":response}
+                attempt=bool(response.strip())
+            selfcheck=st.selectbox("내가 느낀 이해 정도 (선택)",[None,"아직 잘 모르겠어요",
+                                       "조금 이해했어요","내 말로 설명할 수 있어요"],
+                                   format_func=lambda x:x or "나중에 평가할래요")
+            saved=st.form_submit_button("내 학습기록에 저장",type="primary")
+        if saved:
+            if attempt:
+                db.execute("INSERT INTO demo_practice VALUES(?,?,?,?,?,?,?)",
+                           (ident(),owner,course,topic,chosen["id"],
+                            json.dumps({"work":work,"student_selfcheck":selfcheck,
+                                        "method_name":chosen["name"],
+                                        "context_difficulty":difficulty},ensure_ascii=False),now()))
+                st.success("내가 직접 수행한 내용을 저장했어요.")
+            else:
+                st.warning("실제 수행한 내용을 먼저 적어 주세요.")
+        with st.expander("막혔을 때 도움과 예시 보기"):
+            for i,step in enumerate(chosen["steps"],1):
+                st.markdown(f"{i}. {step}")
+            if chosen.get("example"):
+                st.info(chosen["example"])
+    if st.button("다른 학습전략 고르기",key="study_pick_again"):
+        st.session_state.pop("study_strategy_selected",None)
+        st.rerun()
+
+
+def conversation(db,owner,client,model,course,topic,excerpt):
+    st.markdown("### 💬 AI와 공부하기")
+    st.caption("질문을 자유롭게 해 주세요. AI는 설명과 선택지를 제공하고 목표 및 기록을 마음대로 바꾸지 않아요.")
+    hist=chat_messages(db,owner,course,limit=10)
+    for message in hist[-6:]:
+        with st.chat_message(message["role"]):
+            st.write(message["text"])
+    if st.session_state.get("study_chat_excerpt"):
+        st.caption("선택한 문단을 질문의 근거로 활용해요.")
+        excerpt=st.session_state["study_chat_excerpt"]
+    with st.form("study_chat_form",clear_on_submit=True):
+        q=st.text_area("AI에게 물어보기",key="study_chat_question",height=80,
+                       placeholder="예: 단기기억과 장기기억이 실제 공부할 때 어떻게 다른가요?")
+        submit=st.form_submit_button("질문 보내기",type="primary")
+    if submit:
+        if not q.strip():
+            st.warning("궁금한 점을 적어 주세요.")
+        elif not client:
+            st.error("OpenAI API 키가 설정되지 않아 실제 AI 대화는 사용할 수 없어요.")
+        else:
+            try:
+                with st.spinner("질문에 맞게 설명하고 있어요"):
+                    reply=answer(client,model,course,topic,q,hist,excerpt)
+                put_chat(db,owner,course,"user",q)
+                put_chat(db,owner,course,"assistant",reply)
+                st.rerun()
+            except Exception as e:
+                st.error("AI 응답 실패: "+safe_error_message(e))
+                st.caption("질문 내용은 그대로 유지해 다시 시도할 수 있어요.")
+
+
+def study_view(db,owner,client,model):
+    st.markdown('<div class="hero"><div class="eyebrow">STUDY · 나에게 맞는 학습</div>'
+                '<h2>읽고, 표시하고, 직접 해봐요</h2>'
+                '<p>내 자료와 고민에 따라 필요한 도움을 선택할 수 있어요.</p></div>',unsafe_allow_html=True)
+    a,b=st.columns(2)
+    course=a.text_input("교과목",value="심리학개론",key="study_course",
+                        placeholder="예: 심리학개론")
+    topic=b.text_input("오늘 공부할 주제",key="study_topic",
+                       placeholder="예: 기억과 학습")
+    with st.container(border=True):
+        excerpt=pdf_study(db,owner)
+    st.divider()
+    strategy_and_practice(db,owner,client,model,course,topic,excerpt)
+    st.divider()
+    conversation(db,owner,client,model,course,topic,excerpt)
