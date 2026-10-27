@@ -101,6 +101,7 @@ def run():
         st.session_state["compass_page"]=target
     st.markdown('<div class="smallcaps">MY LEARNING COMPASS</div>',unsafe_allow_html=True)
     st.title("나의 학습나침반")
+    st.caption("업데이트 2026-10-27b · PDF 드래그 메뉴 및 전공, 진로 탐색 표시 개선")
     st.radio("이동",MENU,key="compass_page",horizontal=True,label_visibility="collapsed")
     st.divider()
     page=st.session_state["compass_page"]
