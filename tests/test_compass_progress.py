@@ -27,9 +27,6 @@ class CompassProgressTests(unittest.TestCase):
         self.db=connect()
         self.db.execute("DELETE FROM compass_tasks")
         self.db.execute("DELETE FROM demo_goals")
-        for table in ("compass_goal_criteria","compass_time_observations","compass_adjustments"):
-            self.db.execute(f"""CREATE TABLE IF NOT EXISTS {table}
-               (id TEXT, owner TEXT, goal_id TEXT, PRIMARY KEY(id))""") if False else None
 
     def tearDown(self):
         self.db.close()
