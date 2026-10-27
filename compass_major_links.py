@@ -135,8 +135,8 @@ def study_exploration(db,owner,client,model,course,topic):
                 save_link(db,owner,course,topic,excerpt,interest,major,question)
                 st.success("내가 작성한 질문을 저장했어요. 학습일지에서 다시 돌아볼 수 있어요.")
             except ValueError as e: st.warning(str(e))
-        with st.expander("필요할 때만 AI가 전공 및 진로 연결 설명하기"):
-            st.caption("AI는 가능성과 확인할 질문을 제시해요. 실제 교육과정 및 진로 정보는 공식 자료로 확인해요.")
+        with st.container(border=True):
+            st.caption("AI가 전공 및 진로 연결을 설명할 수 있어요. 학생이 요청할 때만 활용하고 공식 교육과정을 직접 확인해요.")
             if st.button("교과목과 관심 분야의 연결 설명 받기",key="major_ai_course"):
                 try:
                     with st.spinner("학생이 선택한 주제와 질문을 연결해 설명하는 중이에요"):
