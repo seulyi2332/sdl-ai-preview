@@ -112,6 +112,55 @@ def home_view(db,owner,client,model):
     n=db.execute("SELECT COUNT(*) FROM compass_marks WHERE owner=? AND state='active'",(owner,)).fetchone()[0]
     if n:
         st.caption(f"📎 내가 남긴 PDF 학습 표시 {n}개 · '내 기록'에서 필요한 부분만 펼쳐 볼 수 있어요.")
+    # A concise learning trail, not an auto-scored student profile.
+    from compass_journal import rows_for_diary
+    diary=rows_for_diary(db,owner,limit=1)
+    highlights=all_rows(db,"""SELECT kind,text,note FROM compass_marks
+          WHERE owner=? AND state='active' AND kind IN ('흥미','어려움')
+          ORDER BY created DESC LIMIT 2""",(owner,))
+    if diary or highlights:
+        st.markdown("### 내가 남긴 학습의 흔적")
+        left,right=st.columns(2,gap="medium")
+        with left.container(border=True):
+            st.markdown("**✍️ 최근 학습일지**")
+            if diary:
+                st.caption(diary[0]["created"][:16])
+                st.write((diary[0]["briefing"] or diary[0]["original"])[:360])
+            else:
+                st.caption("기록된 학습일지가 아직 없어요.")
+            if st.button("나의 학습일지 열기",key="home_open_diary"):
+                _jump("학습일지")
+        with right.container(border=True):
+            st.markdown("**📌 내가 표시한 내용**")
+            for marked in highlights:
+                st.caption("● "+marked["kind"])
+                st.write(marked["text"][:115]+("…" if len(marked["text"])>115 else ""))
+            if st.button("표시한 문장 모아보기",key="home_open_marks"):
+                _jump("내 기록")
+    with st.expander("💬 지금 AI에게 물어보기 · 선택",expanded=False):
+        st.caption("어려움을 말하면 AI가 내용 설명과 실제 예시를 제공해요. 목표나 계획을 자동 변경하지 않아요.")
+        from compass_store import chat_messages,put_chat
+        from compass_chat import answer
+        from sdl_upgrade.model_client import safe_error_message
+        past=chat_messages(db,owner,"오늘",limit=4)
+        for h in past:
+            with st.chat_message(h["role"]):
+                st.write(h["text"])
+        with st.form("home_chat_form",clear_on_submit=True):
+            question=st.text_area("오늘 공부에 관해 궁금한 점",height=74,key="home_chat_question",
+                placeholder="예: 어떻게 공부를 시작할지 모르겠어요.")
+            sent=st.form_submit_button("AI에게 질문하기",type="primary")
+        if sent and question.strip():
+            if not client:
+                st.error("실제 AI 연결이 설정되지 않았어요.")
+            else:
+                try:
+                    reply=answer(client,model,"오늘의 학습","",question,past)
+                    put_chat(db,owner,"오늘","user",question)
+                    put_chat(db,owner,"오늘","assistant",reply)
+                    st.rerun()
+                except Exception as e:
+                    st.error("AI 연결 오류: "+safe_error_message(e))
 
 
 def goal_view(db,owner,client,model):
