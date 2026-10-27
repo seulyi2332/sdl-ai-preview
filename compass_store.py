@@ -50,6 +50,9 @@ def connect():
         paragraph_id TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,
         note TEXT NOT NULL DEFAULT '',state TEXT NOT NULL DEFAULT 'active',
         created TEXT NOT NULL,UNIQUE(owner,material_id,paragraph_id,kind))""")
+    # Existing student highlights remain readable when introducing exact color rectangles.
+    if "geometry" not in {r["name"] for r in con.execute("PRAGMA table_info(compass_marks)")}:
+        con.execute("ALTER TABLE compass_marks ADD COLUMN geometry TEXT NOT NULL DEFAULT ''")
     con.execute("""CREATE TABLE IF NOT EXISTS compass_chat (
         id TEXT PRIMARY KEY,owner TEXT NOT NULL,course TEXT NOT NULL DEFAULT '',
         role TEXT NOT NULL,text TEXT NOT NULL,created TEXT NOT NULL)""")
@@ -124,15 +127,36 @@ def get_material(db,owner,mid):
     return dict(row) if row else None
 
 
-def put_mark(db,owner,mid,paragraph_id,kind,content,note=""):
+def put_mark(db,owner,mid,paragraph_id,kind,content,note="",geometry=None):
+    """Save a learner-selected highlight and optional page-relative rectangles.
+
+    Geometry is optional so older paragraph/list highlights keep working.
+    It is never taken from or used as executable HTML or JavaScript.
+    """
     if kind not in MARKS:
         raise ValueError("알 수 없는 표시")
+    if not db.execute("SELECT id FROM compass_materials WHERE id=? AND owner=?",(mid,owner)).fetchone():
+        raise ValueError("본인의 PDF 자료를 찾을 수 없어요.")
+    boxes=[]
+    for part in (geometry or [])[:85]:
+        if not isinstance(part,dict):
+            continue
+        try:
+            box={k:round(float(part[k]),3) for k in ("x","y","w","h")}
+        except (TypeError,ValueError,KeyError):
+            continue
+        if (0<=box["x"]<=100 and 0<=box["y"]<=100
+            and 0<box["w"]<=100 and 0<box["h"]<=20
+            and box["x"]+box["w"]<=100.6
+            and box["y"]+box["h"]<=100.6):
+            boxes.append(box)
     db.execute("""INSERT INTO compass_marks
-        (id,owner,material_id,paragraph_id,kind,text,note,state,created)
-        VALUES(?,?,?,?,?,?,?,'active',?)
+        (id,owner,material_id,paragraph_id,kind,text,note,state,created,geometry)
+        VALUES(?,?,?,?,?,?,?,'active',?,?)
         ON CONFLICT(owner,material_id,paragraph_id,kind)
-        DO UPDATE SET note=excluded.note,text=excluded.text,state='active'""",
-       (ident(),owner,mid,paragraph_id,kind,content[:1600],note[:400],now()))
+        DO UPDATE SET note=excluded.note,text=excluded.text,geometry=excluded.geometry,state='active'""",
+       (ident(),owner,mid,paragraph_id,kind,content[:1600],note[:400],now(),
+        json.dumps(boxes,separators=(",",":")) if boxes else ""))
 
 
 def marks(db,owner,kind=None,include_hidden=False):
