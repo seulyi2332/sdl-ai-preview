@@ -24,6 +24,38 @@ facts에 넣는 객체는 {"text":"정리한 내용","evidence":"원문 연속 �
 """
 
 
+
+FOLLOWUP_SYSTEM = """너는 대학생의 자기주도학습을 돕는 학습일기 대화 상대다.
+학생이 방금 작성한 학습일기와 학생이 직접 선택한 관심 전공을 읽고, 일기를 더 깊게
+돌아볼 수 있는 자연스러운 한국어 질문을 딱 하나만 해라.
+질문은 학생 글의 구체적인 주제나 표현과 연결하고 1~2문장으로 짧게 작성하라.
+학습내용에서 관심 분야나 전공으로 이어지는 생각, 관심이 생기거나 달라진 점,
+더 알아보고 싶은 내용을 상황에 맞게 물을 수 있다.
+전공 관련 내용이나 단서가 없으면 전공 질문을 억지로 강요하지 말고,
+오늘의 학습 경험과 궁금증을 돌아보는 질문을 해라.
+학생이 전공을 결정했다고 추정하지 않고 적합도 평가, 전공 추천, 진로 결정 유도,
+사실로 확인되지 않은 감정이나 성취의 단정을 하지 않는다.
+학생의 글을 채점하거나 학생 대신 답하지 않는다.
+별도 설문 문항처럼 나열하지 말고 실제 학생에게 대화하듯 말하라.
+답변은 JSON 객체 {"question":"질문"} 하나로 작성하라.
+"""
+
+
+def ask_diary_followup(diary, client, model="gpt-4o-mini", interest=""):
+    """Offer a single optional reflection prompt, without modifying diary text."""
+    if not diary.strip():
+        raise ValueError("학습일기를 먼저 작성해 주세요.")
+    if client is None:
+        raise ValueError("AI 연결이 설정되지 않았어요.")
+    data=complete_json(client,model,FOLLOWUP_SYSTEM,{
+        "student_diary":diary[:6500],
+        "student_chosen_interest":str(interest or "")[:300] or None})
+    question=data.get("question")
+    if not isinstance(question,str) or len(question.strip())<8:
+        raise ValueError("질문을 생성하지 못했어요. 다시 시도해 주세요.")
+    return question.strip()[:230]
+
+
 def validate_draft(result, diary):
     facts=result.get("facts")
     facts=facts if isinstance(facts,dict) else {}
