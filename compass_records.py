@@ -116,6 +116,35 @@ def records_view(db,owner,client,model):
                 st.markdown("**"+(a["topic"] or "자유 학습")+" · "+a["strategy"]+"**")
                 with st.expander("내가 쓴 답 보기"):
                     st.json(json.loads(a["student_work"]),expanded=False)
+    if db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='compass_scaffold_sessions'").fetchone():
+        with st.expander("🪜 단계별 AI 도움 및 내 재시도 기록",expanded=False):
+            scaffolds=all_rows(db,"""SELECT * FROM compass_scaffold_sessions
+                WHERE owner=? ORDER BY created DESC,rowid DESC LIMIT 20""",(owner,))
+            if not scaffolds:
+                st.caption("아직 단계별 도움을 받은 기록이 없어요.")
+            for session in scaffolds:
+                with st.container(border=True):
+                    st.markdown("**"+(session["topic"] or session["course"] or "학습 문제")+"**")
+                    st.caption(session["created"][:16]+" · "+session["question"][:180])
+                    st.write("내 첫 생각: "+session["initial_attempt"][:550])
+                    steps=all_rows(db,"""SELECT step,feedback,student_retry
+                       FROM compass_scaffold_steps WHERE owner=? AND session_id=?
+                       ORDER BY step,rowid""",(owner,session["id"]))
+                    for item in steps:
+                        st.caption(f"{item['step']}단계 도움")
+                        st.write(item["feedback"][:850])
+                        if item["student_retry"]:
+                            st.write("내가 다시 시도한 내용: "+item["student_retry"][:650])
+    if db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='compass_diary_dialogue'").fetchone():
+        with st.expander("💬 학습일기에 이어서 나눈 대화",expanded=False):
+            pairs=all_rows(db,"""SELECT d.created,di.original,d.role,d.text
+               FROM compass_diary_dialogue d
+               JOIN demo_diaries di ON di.id=d.diary_id AND di.owner=d.owner
+               WHERE d.owner=? ORDER BY d.created DESC,d.rowid DESC LIMIT 30""",(owner,))
+            if not pairs:st.caption("아직 저장된 학습일기 대화가 없어요.")
+            for item in pairs:
+                st.caption(item["created"][:16]+" · "+("내 응답" if item["role"]=="user" else "AI 질문 및 도움"))
+                st.write(item["text"])
     with st.expander("이전 학습일지",expanded=False):
         diaries=rows_for_diary(db,owner,limit=20)
         if not diaries:
