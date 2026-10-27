@@ -13,6 +13,7 @@ from sdl_upgrade.model_client import safe_error_message
 from compass_chat import answer
 from compass_feedback import make_feedback
 from compass_strategy_cards import open_library
+from compass_major_links import study_exploration
 
 KIND_TIP={"어려움":"이해가 어렵거나 다시 보고 싶은 문장",
           "흥미":"관심이 가거나 더 알고 싶은 내용",
@@ -327,6 +328,7 @@ def study_view(db,owner,client,model):
                        placeholder="예: 기억과 학습")
     with st.expander("📚 내 학습자료 읽기, 연속 스크롤 및 드래그 표시",expanded=True):
         excerpt=pdf_study(db,owner)
+    study_exploration(db,owner,client,model,course,topic)
     st.divider()
     strategy_and_practice(db,owner,client,model,course,topic,excerpt)
     st.divider()
