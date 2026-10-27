@@ -74,7 +74,7 @@ class StoreTests(unittest.TestCase):
 class RenderTests(unittest.TestCase):
     def test_first_page_and_all_navigation(self):
         from streamlit.testing.v1 import AppTest
-        app=AppTest.from_file("ai_preview_app.py",default_timeout=40).run()
+        app=AppTest.from_file(os.path.join(os.path.dirname(os.path.dirname(__file__)),"ai_preview_app.py"),default_timeout=40).run()
         self.assertFalse(app.exception,[e.message for e in app.exception])
         self.assertTrue(any("할 일" in b.label for b in app.button))
         for page in ("목표와 계획","공부하기","학습일지","내 기록"):
