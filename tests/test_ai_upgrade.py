@@ -4,21 +4,22 @@ from types import SimpleNamespace
 from sdl_upgrade.strategies import StudyContext, CATALOG, recommend
 from sdl_upgrade.ai import suggest_strategies
 from sdl_upgrade.journal import validate_draft, analyze_diary, CATEGORIES
+from sdl_upgrade.model_client import safe_error_message
 
 
-class FakeCompletions:
+class FakeResponses:
     def __init__(self, data):
         self.data=data
         self.calls=[]
     def create(self, **kw):
         import json
         self.calls.append(kw)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(self.data,ensure_ascii=False)))])
+        return SimpleNamespace(output_text=json.dumps(self.data,ensure_ascii=False))
 
 
 def mock_client(data):
-    obj=FakeCompletions(data)
-    return SimpleNamespace(chat=SimpleNamespace(completions=obj)),obj
+    obj=FakeResponses(data)
+    return SimpleNamespace(responses=obj),obj
 
 
 class TestStrategy(unittest.TestCase):
@@ -43,6 +44,19 @@ class TestStrategy(unittest.TestCase):
         self.assertEqual(1,len(result))
         self.assertEqual("compare",result[0]["id"])
         self.assertEqual("openai_generated",result[0]["source"])
+
+    def test_reasoning_model_uses_responses_without_temperature(self):
+        client,stub=mock_client({"strategies":[{"id":"compare","reason":"비교","task_prompt":"표에 써보세요"}]})
+        suggest_strategies(StudyContext(course="심리학",difficulty="차이가 헷갈려요"),client,model="gpt-6.1-sol")
+        self.assertEqual("gpt-6.1-sol",stub.calls[0]["model"])
+        self.assertNotIn("temperature",stub.calls[0])
+        self.assertNotIn("response_format",stub.calls[0])
+        self.assertEqual("json_object",stub.calls[0]["text"]["format"]["type"])
+        self.assertIn("json",stub.calls[0]["input"][0]["content"])
+
+    def test_safe_error_message_does_not_expose_secret(self):
+        err=ValueError("sk-sensitive-data")
+        self.assertNotIn("sk-sensitive-data",safe_error_message(err))
 
     def test_invalid_ai_result_is_error_not_impersonated(self):
         client,_=mock_client({"strategies":[{"id":"unknown","reason":"추정"}]})
