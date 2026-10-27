@@ -99,9 +99,7 @@ def journal_form(db,owner,client,model):
                 (draft["id"],owner,text,briefing,
                  json.dumps(draft.get("facts") or {},ensure_ascii=False),now()))
             st.success("내가 확인한 학습일지와 브리핑을 저장했어요.")
-        if b.button("브리핑 수정 전으로",key="diary_reset_"+draft["id"]):
-            st.session_state["brief_"+draft["id"]]=draft.get("briefing_draft") or ""
-            st.rerun()
+        b.caption("AI는 학생의 자기평가를 대신하지 않아요.")
     with st.expander("내가 생각해 볼 질문 (선택)"):
         if not draft.get("questions"):
             st.caption("현재 글만으로 충분할 수 있어요.")
