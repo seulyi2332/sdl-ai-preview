@@ -4,6 +4,7 @@ import html
 import streamlit as st
 from compass_store import all_rows,marks,mark_status,material_rows,get_material
 from compass_journal import rows_for_diary
+from compass_independence import recent as recent_strategy_choices
 
 COLORS={"어려움":("#fff0ea","#a14c2b"),"흥미":("#eff4ff","#355fa8"),
         "핵심":("#fff9df","#8b6d17"),"질문":("#ebf7f0","#226e54")}
@@ -70,6 +71,16 @@ def records_view(db,owner,client,model):
                 unsafe_allow_html=True)
     marked_section(db,owner,client,model)
     st.divider()
+    with st.expander("내가 선택한 학습전략 돌아보기 · 선택",expanded=False):
+        history=recent_strategy_choices(db,owner,limit=20)
+        if not history:
+            st.caption("공부할 때 전략을 직접 고르거나 AI 제안을 보고 선택하면 여기에 기록돼요.")
+        for selected in history:
+            origin=("스스로 선택" if selected["choice_source"]=="student"
+                    else "AI 제안을 보고 선택")
+            st.caption(selected["created"][:16]+" · "+origin+" · "+selected["course"])
+            st.markdown("**"+html.escape(selected["name"])+"**")
+        st.caption("이 기록은 선택 경로를 보여 줄 뿐, 자기주도학습역량을 채점하지 않아요.")
     with st.expander("직접 해 본 학습활동",expanded=False):
         activities=all_rows(db,"SELECT * FROM demo_practice WHERE owner=? ORDER BY created DESC LIMIT 40",(owner,))
         if not activities:
