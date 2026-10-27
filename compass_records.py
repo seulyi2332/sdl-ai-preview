@@ -6,6 +6,7 @@ from compass_store import all_rows,marks,mark_status,material_rows,get_material
 from compass_journal import rows_for_diary
 from compass_independence import recent as recent_strategy_choices
 from compass_highlights import label as difficulty_label,set_label as set_difficulty_label
+from compass_major_links import record_exploration
 
 COLORS={"어려움":("#ffd1d4","#873b44"),"흥미":("#cfe3ff","#305889"),
         "핵심":("#ffefab","#75591c"),"질문":("#c8f0d9","#246b49")}
@@ -92,6 +93,7 @@ def records_view(db,owner,client,model):
         st.caption("선택한 문장만 모아서 보는 화면이에요. 전체 기록을 누르면 학습활동과 학습일지도 확인할 수 있어요.")
         return
     st.divider()
+    record_exploration(db,owner)
     with st.expander("내가 선택한 학습전략 돌아보기 · 선택",expanded=False):
         history=recent_strategy_choices(db,owner,limit=20)
         if not history:
