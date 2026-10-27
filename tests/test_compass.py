@@ -109,7 +109,12 @@ class RenderTests(unittest.TestCase):
         save=next(b for b in app.button if b.label=="내 학습기록에 저장")
         save.click().run()
         self.assertFalse(app.exception,[x.message for x in app.exception])
-        self.assertTrue(any(x.key=="study_feedback_mode" for x in app.radio),\n            "After save, feedback radio missing. Widgets="+str([(x.key,x.label) for x in app.radio])+\n            " Messages="+str([x.message for x in app.success])+\n            " Warnings="+str([x.message for x in app.warning])+\n            " Buttons="+str([(x.key,x.label) for x in app.button]))\n        mode=app.radio(key="study_feedback_mode")
+        self.assertTrue(any(x.key=="study_feedback_mode" for x in app.radio),
+            "After save, feedback radio missing. Widgets="+str([(x.key,x.label) for x in app.radio])+
+            " Messages="+str([x.message for x in app.success])+
+            " Warnings="+str([x.message for x in app.warning])+
+            " Buttons="+str([(x.key,x.label) for x in app.button]))
+        mode=app.radio(key="study_feedback_mode")
         self.assertEqual("정답을 바로 말하기보다 단서부터",mode.value)
         mode.set_value("필요한 개념과 예시 자세히").run()
         self.assertEqual("필요한 개념과 예시 자세히",
