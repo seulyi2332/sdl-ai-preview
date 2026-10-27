@@ -351,7 +351,7 @@ export default function ({parentElement,data,setTriggerValue}) {
     let pointerFallback=null;
     if(!text || !range || !viewport.contains(range.startContainer)) {
       pointerFallback=textFromPointerDrag();
-      if(pointerFallback) text=pointerFallback.text;
+      if(pointerFallback) { text=pointerFallback.text; range=null; }
     }
     if(text.length<2 || text.length>1600) {
       if(status)status.textContent="선택한 문장을 읽지 못했어요. 다시 드래그하거나 아래 문단 목록을 이용해 주세요.";
@@ -399,6 +399,7 @@ export default function ({parentElement,data,setTriggerValue}) {
            event.target?.closest?.(".pdf-page")||null;
   };
   const onPointerDown=event=>{
+    if(status)status.textContent="드래그 시작 감지됨 · 글자를 선택한 뒤 놓아 주세요.";
     dragStart=caretAt(event);
     dragEnd=null;
     dragStartPoint={x:event.clientX,y:event.clientY};
@@ -429,7 +430,11 @@ export default function ({parentElement,data,setTriggerValue}) {
   if(retry) {
     retry.onpointerdown=e=>e.preventDefault();
     retry.onmousedown=e=>e.preventDefault();
-    retry.onclick=showBar;
+    retry.onclick=()=>{
+      // Retain the last selection on click, then recover by pointer coordinates.
+      if(status)status.textContent="선택 영역을 확인하고 있어요.";
+      showBar();
+    };
   }
   toolbar.addEventListener("mousedown",e=>e.preventDefault());
   actions.replaceChildren();
