@@ -89,6 +89,7 @@ def records_view(db,owner,client,model):
                 unsafe_allow_html=True)
     mode=st.segmented_control("기록 보기",["하이라이트 모음","전체 기록"],
                                default="하이라이트 모음",key="records_mode")
+    records_section(db,owner)
     marked_section(db,owner,client,model)
     if mode=="하이라이트 모음":
         st.caption("선택한 문장만 모아서 보는 화면이에요. 전체 기록을 누르면 학습활동과 학습일지도 확인할 수 있어요.")
