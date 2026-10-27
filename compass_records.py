@@ -43,7 +43,13 @@ def marked_section(db,owner,client,model):
                 st.rerun()
             if row[2].button("이 내용에 관해 공부하기",key="mark_study_"+m["id"]):
                 st.session_state["study_chat_excerpt"]=m["text"]
-                st.session_state["study_chat_question"]="제가 표시한 다음 내용을 더 쉽게 설명하고 활용 예시를 보여 주세요."
+                if m["kind"]=="어려움":
+                    st.session_state["study_difficulty"]="내가 어렵다고 표시한 부분: "+m["text"][:340]
+                    st.session_state["study_chat_question"]="제가 어려움을 표시한 이 문단을 쉽게 설명하고 예시로 보여 주세요."
+                elif m["kind"]=="흥미":
+                    st.session_state["study_chat_question"]="내가 흥미를 표시한 내용이에요. 교과목과 관심 전공에 연결해 자세히 알아보고 싶어요."
+                else:
+                    st.session_state["study_chat_question"]="제가 표시한 내용을 정확하게 이해할 수 있게 예시를 보여 주세요."
                 st.session_state["_compass_go"]="공부하기"
                 st.rerun()
     archived=[m for m in marks(db,owner,include_hidden=True) if m["state"] in ("hidden","resolved")]
