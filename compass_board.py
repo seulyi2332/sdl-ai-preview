@@ -2,6 +2,7 @@
 import html
 import streamlit as st
 from compass_store import all_rows,task_rows,add_task,change_task,ident,now,STATES,interest_for,save_interest
+from compass_progress import criterion_for,save_criterion,save_time,latest_time,revise_goal,adjustments
 
 VISIBLE=STATES[:4]
 LABELS={"시작 전":"○ 시작 전","진행 중":"◐ 진행 중",
@@ -76,6 +77,41 @@ def task_board(db,owner,compact=False):
                     st.rerun()
                 else:
                     st.warning("할 일을 적어 주세요.")
+    if not compact and tasks:
+        with st.expander("⏱ 계획한 시간과 실제 시간을 비교하기 · 필요할 때만",expanded=False):
+            st.caption("시간은 성실성이나 역량 점수가 아니에요. 스스로 적어 둔 계획과 실제 경험을 비교해요.")
+            options={t["id"]:t["title"] for t in tasks}
+            chosen_id=st.selectbox("비교할 할 일",list(options),
+                                   format_func=lambda k:options[k],key="time_task")
+            old=latest_time(db,owner,chosen_id)
+            if old:
+                first="미입력" if old["estimated"] is None else str(old["estimated"])+"분"
+                second="미입력" if old["actual"] is None else str(old["actual"])+"분"
+                st.caption(f"최근 기록 · 예상 {first} / 실제 {second}")
+                if old["estimated"] is not None and old["actual"] is not None:
+                    delta=old["actual"]-old["estimated"]
+                    st.write("예상보다 "+(f"{delta}분 더 걸렸어요." if delta>0 else
+                           (f"{abs(delta)}분 덜 걸렸어요." if delta<0 else "예상과 같았어요.")))
+            with st.form("time_reflection",clear_on_submit=True):
+                a,b,c=st.columns(3)
+                estimated=a.text_input("예상(분)",placeholder="예: 30")
+                actual=b.text_input("실제(분)",placeholder="예: 45")
+                next_one=c.text_input("다음 예상(분)",placeholder="예: 40")
+                reason=st.text_input("차이가 발생한 이유 또는 조정할 점 (선택)")
+                submitted=st.form_submit_button("내 시간기록 저장")
+                if submitted:
+                    def to_min(v):
+                        if not v.strip():
+                            return None
+                        if not v.strip().isdigit():
+                            raise ValueError("시간은 숫자로 적어 주세요.")
+                        return int(v.strip())
+                    try:
+                        save_time(db,owner,chosen_id,to_min(estimated),to_min(actual),
+                                  reason,to_min(next_one))
+                        st.success("내가 작성한 시간 비교를 저장했어요.")
+                    except ValueError as e:
+                        st.warning(str(e))
     hidden=all_rows(db,"SELECT id,title FROM compass_tasks WHERE owner=? AND status='숨김'",(owner,))
     if hidden:
         with st.expander(f"숨긴 할 일 {len(hidden)}개"):
@@ -198,27 +234,54 @@ def goal_view(db,owner,client,model):
                 n=sum(x["status"]=="완료" for x in linked)
                 st.caption(f"연결된 할 일 {n}/{len(linked)}개 완료 · 목표 달성률은 아니에요.")
             with st.expander("목표 수정 및 관리"):
+                st.caption("내가 확인할 목표 도달 기준을 직접 적어 둘 수 있어요.")
                 with st.form("edit_goal_"+goal["id"]):
                     title=st.text_input("목표",value=goal["title"])
                     parent=st.text_input("연결할 장기 목표 (선택)",value=goal["parent"])
                     period=st.text_input("기간",value=goal["period"])
+                    criteria=st.text_area("스스로 확인할 목표 도달 기준 (선택)",value=criterion_for(db,owner,goal["id"]),height=80,
+                       placeholder="예: 자료를 덮고 개념 두 가지의 차이를 말할 수 있다.")
                     if st.form_submit_button("변경 저장") and title.strip():
                         db.execute("UPDATE demo_goals SET title=?,parent=?,period=? WHERE id=? AND owner=?",
                                    (title.strip(),parent.strip(),period.strip(),goal["id"],owner))
+                        save_criterion(db,owner,goal["id"],criteria)
                         st.rerun()
                 if st.button("이 목표 숨기기",key="hide_goal_"+goal["id"]):
                     db.execute("UPDATE demo_goals SET state='hidden' WHERE id=? AND owner=?",(goal["id"],owner))
                     st.rerun()
+            criterion=criterion_for(db,owner,goal["id"])
+            if criterion:
+                st.caption("내가 정한 확인 기준 · "+criterion[:200])
+            with st.expander("돌아본 뒤 목표를 바꾸고 싶다면 · 선택",expanded=False):
+                with st.form("revise_goal_"+goal["id"],clear_on_submit=True):
+                    revision=st.text_input("새 목표",value=goal["title"])
+                    why=st.text_area("목표를 바꾸려는 이유 (학생의 생각)",height=75,
+                                     placeholder="예: 강의자료에서 아직 이해하지 못한 부분을 확인해서")
+                    if st.form_submit_button("수정 이유와 함께 반영"):
+                        try:
+                            revise_goal(db,owner,goal["id"],revision,why)
+                            st.success("내가 수정한 목표와 이유를 기록했어요.")
+                            st.rerun()
+                        except ValueError as e:
+                            st.warning(str(e))
+                history=adjustments(db,owner,goal["id"])[:2]
+                for prev in history:
+                    st.caption("이전 "+prev["before_text"]+" → 변경 "+prev["after_text"])
+                    st.caption("내가 남긴 이유: "+prev["reason"])
     with st.expander("＋ 새로운 목표 추가",expanded=not bool(goals)):
         with st.form("add_goal",clear_on_submit=True):
             title=st.text_input("설정할 목표",placeholder="예: 기억의 원리를 내 말로 설명하기")
             a,b=st.columns(2)
             parent=a.text_input("장기 목표 (선택)",placeholder="예: 심리학과 관련된 관심 탐색")
             period=b.text_input("기간 (선택)",placeholder="예: 이번 주")
+            criteria=st.text_input("목표 도달을 어떻게 확인할까요? (선택)",placeholder="예: 자료 없이 핵심개념 설명하기")
             if st.form_submit_button("내 목표에 추가",type="primary"):
                 if title.strip():
+                    gid=ident()
                     db.execute("INSERT INTO demo_goals VALUES(?,?,?,?,?,?,?)",
-                               (ident(),owner,title.strip(),parent.strip(),period.strip(),"active",now()))
+                               (gid,owner,title.strip(),parent.strip(),period.strip(),"active",now()))
+                    if criteria.strip():
+                        save_criterion(db,owner,gid,criteria)
                     st.rerun()
                 else:
                     st.warning("목표를 적어 주세요.")
