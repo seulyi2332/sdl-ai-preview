@@ -7,7 +7,7 @@ from types import SimpleNamespace
 TMP=tempfile.TemporaryDirectory()
 os.environ["SDL_AI_PREVIEW_DB"]=os.path.join(TMP.name,"progress.db")
 
-from compass_store import connect,add_task,task_rows
+from compass_store import connect,add_task,task_rows,add_material
 from compass_progress import (save_criterion,criterion_for,save_time,
                               latest_time,time_summaries,revise_goal,adjustments)
 from compass_feedback import make_feedback
@@ -113,6 +113,29 @@ class ScrollablePdfTests(unittest.TestCase):
         same=selection_key(2,"기회비용은   포기한 대안")
         self.assertEqual(same,selection_key(2,"기회비용은 포기한 대안"))
         self.assertNotEqual(same,selection_key(3,"기회비용은 포기한 대안"))
+
+
+class PdfAppMountTests(unittest.TestCase):
+    def test_saved_pdf_page_renders_in_study_tab(self):
+        import fitz
+        from streamlit.testing.v1 import AppTest
+        doc=fitz.open()
+        for label in ("We study memory and cognition.","This page is about reflection."):
+            page=doc.new_page()
+            page.insert_text((72,95),label)
+        raw=doc.tobytes()
+        doc.close()
+        db=connect()
+        add_material(db,"S01","public-sample.pdf",raw,
+          [{"page":1,"id":"p1-0","text":"We study memory and cognition."},
+           {"page":2,"id":"p2-0","text":"This page is about reflection."}],2)
+        db.close()
+        entry=os.path.join(os.path.dirname(os.path.dirname(__file__)),"ai_preview_app.py")
+        app=AppTest.from_file(entry,default_timeout=60).run()
+        self.assertFalse(app.exception,[str(e.message) for e in app.exception])
+        app.text_input(key="participant_access_code").set_value("S01").run()
+        app.radio(key="compass_page").set_value("공부하기").run()
+        self.assertFalse(app.exception,[str(e.message) for e in app.exception])
 
 
 if __name__=="__main__":
