@@ -86,6 +86,37 @@ class RenderTests(unittest.TestCase):
             self.assertFalse(app.exception,[e.message for e in app.exception])
 
 
+    def test_feedback_selection_works_as_visible_radio(self):
+        """Saved practice shows tappable radio choices rather than a mobile dropdown."""
+        from streamlit.testing.v1 import AppTest
+        app=AppTest.from_file(
+            os.path.join(os.path.dirname(os.path.dirname(__file__)),"ai_preview_app.py"),
+            default_timeout=40).run()
+        app.text_input(key="participant_access_code").set_value("S03").run()
+        app.radio(key="compass_page").set_value("공부하기").run()
+        self.assertFalse(app.exception,[x.message for x in app.exception])
+        app.button(key="study_recommend").click().run()
+        buttons=[b for b in app.button if b.key and b.key.startswith("study_pick_")]
+        self.assertTrue(buttons,"추천된 전략을 고르는 버튼이 보여야 해요.")
+        buttons[0].click().run()
+        fields={field.label:field for field in app.text_area}
+        if "내가 직접 해 본 내용" in fields:
+            fields["내가 직접 해 본 내용"].set_value("오늘 배운 개념을 예를 들어 설명했어요.").run()
+        elif "내 풀이 과정" in fields:
+            fields["내 풀이 과정"].set_value("문제의 조건을 먼저 찾아보았어요.").run()
+        else:
+            fields["첫 개념의 특징"].set_value("두 개념의 차이를 구분했어요.").run()
+        save=next(b for b in app.button if b.label=="내 학습기록에 저장")
+        save.click().run()
+        self.assertFalse(app.exception,[x.message for x in app.exception])
+        mode=app.radio(key="study_feedback_mode")
+        self.assertEqual("정답을 바로 말하기보다 단서부터",mode.value)
+        mode.set_value("필요한 개념과 예시 자세히").run()
+        self.assertEqual("필요한 개념과 예시 자세히",
+                         app.radio(key="study_feedback_mode").value)
+        self.assertTrue(any(b.key=="study_feedback_btn" for b in app.button))
+
+
 class ParticipantCodeTests(unittest.TestCase):
     def test_student_and_backup_codes(self):
         self.assertEqual(len(STUDENT_CODES),12)
