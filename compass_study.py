@@ -3,7 +3,7 @@ import json
 import html
 import streamlit as st
 from compass_pdf import extract_pdf,render_page
-from compass_pdf_selection import show_pdf_reader,selection_key,component_available
+from compass_pdf_selection import show_pdf_reader,selection_key,component_available,readable_ratio
 from compass_store import (all_rows,material_rows,get_material,add_material,interest_for,
                            put_mark,put_chat,chat_messages,ident,now)
 from sdl_upgrade.strategies import StudyContext,recommend,CATALOG
@@ -78,16 +78,18 @@ def pdf_study(db,owner):
                 if (event and event!=st.session_state.get("study_pdf_last_event")
                     and 1<=pg<=pages and len(excerpt)>=2 and len(excerpt)<=2500
                     and kind in KIND_TIP):
-                    # Existing records remain available in '내 기록'.
-                    put_mark(db,owner,chosen,selection_key(pg,excerpt),kind,excerpt)
                     st.session_state["study_pdf_last_event"]=event
                     st.session_state["study_pdf_scroll"]=max(0,float(selection.get("scroll") or 0))
-                    st.session_state["study_chat_excerpt"]=excerpt
-                    if kind=="어려움":
-                        st.session_state["study_difficulty"]="내가 어렵다고 표시한 글: "+excerpt[:350]
-                    if kind=="흥미":
-                        st.session_state["study_chat_question"]="내가 흥미를 표시한 이 내용을 교과목과 관심 전공에 연결해서 설명해 주세요."
-                    st.success("내가 드래그한 글을 '"+kind+"'로 저장했어요. '내 기록'에서 다시 볼 수 있어요.")
+                    if readable_ratio(excerpt)<0.65:
+                        st.warning("이 PDF에서 선택한 글자 정보가 깨져 있어 표시를 저장하지 않았어요. PDF를 다시 저장하거나 아래 문단 선택으로 시도해 주세요.")
+                    else:
+                        put_mark(db,owner,chosen,selection_key(pg,excerpt),kind,excerpt)
+                        st.session_state["study_chat_excerpt"]=excerpt
+                        if kind=="어려움":
+                            st.session_state["study_difficulty"]="내가 어렵다고 표시한 글: "+excerpt[:350]
+                        if kind=="흥미":
+                            st.session_state["study_chat_question"]="내가 흥미를 표시한 이 내용을 교과목과 관심 전공에 연결해서 설명해 주세요."
+                        st.success("내가 드래그한 글을 '"+kind+"'로 저장했어요. '내 기록'에서 다시 볼 수 있어요.")
         except Exception as e:
             st.warning("연속 PDF 화면을 열지 못했어요. 아래 문단 선택 방식으로 계속할 수 있어요.")
             st.caption(type(e).__name__)
