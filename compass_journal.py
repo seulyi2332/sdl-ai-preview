@@ -248,4 +248,4 @@ def selfcheck(db,owner):
         else:
             db.execute("INSERT INTO compass_selfcheck VALUES(?,?,?,?,?,?)",
                        (ident(),owner,goal_id,evaluation,memo,now()))
-            st.success("직접 내린 평가를 저장했어요.")
+            st.success("자기평가가 저장되었어요. 목표와 계획, 내 기록에서 같은 평가와 작성한 이유를 다시 볼 수 있어요.")
