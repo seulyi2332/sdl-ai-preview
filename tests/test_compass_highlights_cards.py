@@ -77,7 +77,7 @@ class StreamlitDisplayTests(unittest.TestCase):
         self.assertTrue(any("다시 보고 싶은 어려운 내용" in m.value for m in app.markdown))
         app.radio(key="compass_page").set_value("내 기록").run()
         self.assertFalse(app.exception,[str(e.message) for e in app.exception])
-        self.assertTrue(any("하이라이트" in x.label for x in app.segmented_control))
+        self.assertTrue(any("하이라이트 모음" in list(x.options) for x in app.segmented_control))
         app.radio(key="compass_page").set_value("공부하기").run()
         self.assertFalse(app.exception,[str(e.message) for e in app.exception])
         self.assertTrue(any("학습전략 카드 모음" in ex.label for ex in app.expander))
