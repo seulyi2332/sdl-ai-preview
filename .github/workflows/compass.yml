@@ -4,6 +4,7 @@ on:
     branches:
       - dev/compass-redesign-20261027
       - dev/evaluation-codes-20261027
+      - dev/compass-principles-20261027
   workflow_dispatch:
 jobs:
   compass:
@@ -22,6 +23,8 @@ jobs:
         run: python -m py_compile ai_preview_app.py compass_*.py sdl_upgrade/*.py
       - name: Test learning compass
         run: python -m unittest discover -s tests -p 'test_compass.py' -v
+      - name: Test student-owned progress and feedback
+        run: python -m unittest discover -s tests -p 'test_compass_progress.py' -v
       - name: Test existing learning strategy/diary core
         run: python -m unittest discover -s tests -p 'test_ai_upgrade.py' -v
       - name: Verify server health
