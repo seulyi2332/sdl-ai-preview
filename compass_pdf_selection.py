@@ -259,10 +259,16 @@ export default function ({parentElement,data,setTriggerValue}) {
     toolbar.style.top=clamp(top,4,Math.max(4,root.clientHeight-toolbar.offsetHeight-4))+"px";
     toolbar.style.left=clamp(r.left-base.left,5,Math.max(5,root.clientWidth-toolbar.offsetWidth-5))+"px";
   }
+  let selectionTimer=null;
   const onMouseUp=()=>setTimeout(showBar,25);
   const onTouchEnd=()=>setTimeout(showBar,350);
+  const onSelectionChange=()=>{
+    if(selectionTimer!==null)clearTimeout(selectionTimer);
+    selectionTimer=setTimeout(showBar,450);
+  };
   viewport.addEventListener("mouseup",onMouseUp);
   viewport.addEventListener("touchend",onTouchEnd);
+  document.addEventListener("selectionchange",onSelectionChange);
   toolbar.addEventListener("mousedown",e=>e.preventDefault());
   actions.replaceChildren();
 
@@ -296,6 +302,8 @@ export default function ({parentElement,data,setTriggerValue}) {
   return ()=>{
     viewport.removeEventListener("mouseup",onMouseUp);
     viewport.removeEventListener("touchend",onTouchEnd);
+    document.removeEventListener("selectionchange",onSelectionChange);
+    if(selectionTimer!==null)clearTimeout(selectionTimer);
     viewport.removeEventListener("scroll",onScroll);
   };
 }
