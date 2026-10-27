@@ -3,6 +3,7 @@ import json
 import html
 import streamlit as st
 from compass_pdf import extract_pdf,render_page
+from compass_pdf_selection import show_pdf_reader,selection_key,component_available
 from compass_store import (all_rows,material_rows,get_material,add_material,interest_for,
                            put_mark,put_chat,chat_messages,ident,now)
 from sdl_upgrade.strategies import StudyContext,recommend
@@ -48,46 +49,78 @@ def pdf_study(db,owner):
     st.caption(f"총 {pages}쪽 · 읽을 수 있는 문단 {len(paragraphs)}개")
     if not paragraphs:
         st.warning("텍스트를 추출하지 못한 PDF예요. 스캔한 이미지 PDF일 수 있어요. 화면에서 읽을 수 있지만 AI에 자료 내용이 자동 전달되지는 않아요.")
-    page_no=st.number_input("보고 싶은 쪽",min_value=1,max_value=max(pages,1),
-                            value=1,step=1,key="study_pdf_page")
-    image_col,text_col=st.columns([1.15,1],gap="large")
-    with image_col:
+    st.caption("원본 PDF를 아래로 스크롤하며 본문의 글을 드래그해서 표시할 수 있어요.")
+    saved=db.execute("""SELECT * FROM compass_marks
+        WHERE owner=? AND material_id=? AND state='active'
+        ORDER BY created DESC""",(owner,chosen)).fetchall()
+    saved_overlay=[]
+    for m in saved:
+        token=str(m["paragraph_id"])
         try:
-            st.image(render_page(material["pdf"],page_no,width=880),caption=f"원본 자료 · {page_no}쪽",
-                     use_container_width=True)
-        except Exception:
-            st.warning("이 쪽의 미리보기를 열지 못했어요.")
-        st.download_button("원본 PDF 다운로드",data=material["pdf"],file_name=material["title"],mime="application/pdf",
-                           key="download_pdf_"+chosen)
-    with text_col:
-        pg=[p for p in paragraphs if p["page"]==page_no]
-        st.markdown("#### 표시할 문단 고르기")
-        if not pg:
-            st.caption("이 쪽에는 읽을 수 있는 텍스트가 없어요. 필요한 문구를 직접 질문으로 입력할 수 있어요.")
-            return ""
-        options=[p["id"] for p in pg]
-        selected=st.selectbox("문단",options,key="study_para",
-                              format_func=lambda pid:next(p["text"][:85] for p in pg if p["id"]==pid))
-        paragraph=next(p for p in pg if p["id"]==selected)
-        st.markdown("> "+paragraph["text"][:1600].replace("\n","\n> "))
-        kind=st.radio("이 문단을 어떻게 표시할까요?",list(KIND_TIP),key="study_mark_kind",
-                      horizontal=True,help="내가 선택하는 표시예요.")
-        note=st.text_input("이 문단에 남길 메모 (선택)",key="study_mark_note",
-                           placeholder="예: 이 개념을 다른 전공에서는 어떻게 쓰지?")
-        if st.button("문단 표시 저장",key="study_mark_save",type="primary"):
-            put_mark(db,owner,chosen,selected,kind,paragraph["text"],note)
-            st.success(f"'{kind}'로 표시했어요. 내 기록에서 분류별로 다시 볼 수 있어요.")
-        if st.button("이 문단을 AI와 공부하기",key="study_to_chat"):
-            st.session_state["study_chat_excerpt"]=paragraph["text"]
-            if kind=="어려움":
-                st.session_state["study_difficulty"]="PDF에서 선택한 이 문단을 이해하고 싶어요: "+paragraph["text"][:320]
-                st.session_state["study_chat_question"]="이 문단이 어려워요. 핵심을 쉽게 설명하고 구체적인 예시를 들어 주세요."
-            elif kind=="흥미":
-                st.session_state["study_chat_question"]="이 문단이 흥미로워요. 실제 적용 사례와 관심 전공에서의 연결을 설명해 주세요."
-            else:
-                st.session_state["study_chat_question"]="제가 선택한 문단을 내 말로 설명할 수 있게 사례를 보여 주세요."
-            st.success("선택한 문단을 아래 공부 방법과 AI 대화에 연결했어요.")
-        return paragraph["text"]
+            page=int(token.split("-")[1]) if token.startswith("drag-") else int(token.split("-")[0].lstrip("p"))
+        except (ValueError,IndexError):
+            page=0
+        saved_overlay.append({"page":page,"text":m["text"]})
+    if not component_available():
+        st.warning("현재 Streamlit 버전에서는 PDF 드래그 구성요소를 사용할 수 없어 문단 선택을 제공해요.")
+    else:
+        try:
+            selection=show_pdf_reader(
+                 material["pdf"],chosen,saved_overlay,
+                 scroll=st.session_state.get("study_pdf_scroll",0),
+                 key="study_selectable_pdf")
+            if isinstance(selection,dict) and selection.get("material_id")==chosen:
+                event=str(selection.get("event_id") or "")
+                excerpt=str(selection.get("text") or "").strip()
+                kind=str(selection.get("kind") or "")
+                pg=int(selection.get("page") or 0)
+                if (event and event!=st.session_state.get("study_pdf_last_event")
+                    and 1<=pg<=pages and len(excerpt)>=2 and len(excerpt)<=2500
+                    and kind in KIND_TIP):
+                    # Existing records remain available in '내 기록'.
+                    put_mark(db,owner,chosen,selection_key(pg,excerpt),kind,excerpt)
+                    st.session_state["study_pdf_last_event"]=event
+                    st.session_state["study_pdf_scroll"]=max(0,float(selection.get("scroll") or 0))
+                    st.session_state["study_chat_excerpt"]=excerpt
+                    if kind=="어려움":
+                        st.session_state["study_difficulty"]="내가 어렵다고 표시한 글: "+excerpt[:350]
+                    if kind=="흥미":
+                        st.session_state["study_chat_question"]="내가 흥미를 표시한 이 내용을 교과목과 관심 전공에 연결해서 설명해 주세요."
+                    st.success("내가 드래그한 글을 '"+kind+"'로 저장했어요. '내 기록'에서 다시 볼 수 있어요.")
+        except Exception as e:
+            st.warning("연속 PDF 화면을 열지 못했어요. 아래 문단 선택 방식으로 계속할 수 있어요.")
+            st.caption(type(e).__name__)
+
+    with st.expander("문단 목록에서 선택해서 표시하기 · 대체 방법",expanded=not component_available()):
+        page_no=st.number_input("보고 싶은 쪽",min_value=1,max_value=max(pages,1),
+                                value=1,step=1,key="study_pdf_page")
+        selected_page=[p for p in paragraphs if p["page"]==page_no]
+        if not selected_page:
+            st.caption("이 쪽은 텍스트가 추출되지 않았어요. 이미지 PDF라면 드래그를 지원하지 않을 수 있어요.")
+        else:
+            options=[p["id"] for p in selected_page]
+            selected=st.selectbox("문단",options,key="study_para",
+                                  format_func=lambda pid:next(p["text"][:90] for p in selected_page if p["id"]==pid))
+            paragraph=next(p for p in selected_page if p["id"]==selected)
+            st.markdown("> "+paragraph["text"][:1600].replace("\n","\n> "))
+            kind=st.radio("어떻게 표시할까요?",list(KIND_TIP),key="study_mark_kind",
+                          horizontal=True)
+            note=st.text_input("메모 (선택)",key="study_mark_note")
+            if st.button("선택한 문단 표시 저장",key="study_mark_save",type="primary"):
+                put_mark(db,owner,chosen,selected,kind,paragraph["text"],note)
+                st.session_state["study_chat_excerpt"]=paragraph["text"]
+                st.success("내가 선택한 문단을 '"+kind+"'로 저장했어요.")
+            if st.button("이 문단을 AI와 공부하기",key="study_to_chat"):
+                st.session_state["study_chat_excerpt"]=paragraph["text"]
+                if kind=="어려움":
+                    st.session_state["study_difficulty"]="PDF에서 선택한 이 문단을 이해하고 싶어요: "+paragraph["text"][:320]
+                    st.session_state["study_chat_question"]="이 문단이 어려워요. 핵심을 쉽게 설명하고 구체적인 예시를 들어 주세요."
+                elif kind=="흥미":
+                    st.session_state["study_chat_question"]="이 문단이 흥미로워요. 실제 적용 사례와 관심 전공에서의 연결을 설명해 주세요."
+                else:
+                    st.session_state["study_chat_question"]="제가 선택한 문단을 내 말로 설명할 수 있게 사례를 보여 주세요."
+                st.success("선택한 문단을 공부 방법과 AI 대화에 연결했어요.")
+    return st.session_state.get("study_chat_excerpt") or ""
 
 
 def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
@@ -269,7 +302,7 @@ def study_view(db,owner,client,model):
                         placeholder="예: 심리학개론")
     topic=b.text_input("오늘 공부할 주제",key="study_topic",
                        placeholder="예: 기억과 학습")
-    with st.expander("📚 내 학습자료 읽기와 PDF 문단 표시",expanded=False):
+    with st.expander("📚 내 학습자료 읽기, 연속 스크롤 및 드래그 표시",expanded=True):
         excerpt=pdf_study(db,owner)
     st.divider()
     strategy_and_practice(db,owner,client,model,course,topic,excerpt)
