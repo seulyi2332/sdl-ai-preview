@@ -2,12 +2,11 @@
 import json
 import html
 import streamlit as st
-from sdl_upgrade.journal import analyze_diary
+from sdl_upgrade.journal import analyze_diary,ask_diary_followup
 from sdl_upgrade.model_client import safe_error_message
-from compass_store import all_rows,ident,now
+from compass_store import all_rows,ident,now,interest_for
 from compass_progress import criterion_for,time_summaries,adjustments
 from compass_independence import recent as recent_strategy_choices
-from compass_major_links import reflection_exploration
 
 CATEGORY={
   "studied":"오늘 배운 것","well":"잘된 점","difficult":"어려웠던 점",
@@ -82,10 +81,27 @@ def journal_form(db,owner,client,model):
                 label="내가 직접 고른 방법" if m["choice_source"]=="student" else "AI 제안을 보고 내가 고른 방법"
                 st.caption(label+" · "+m["name"]+" · "+(m["course"] or "교과목 미설정"))
         st.caption("이 기록은 참고자료예요. 학습일지에 무엇을 쓸지는 내가 결정해요.")
-    st.markdown("#### 🌱 전공 및 진로 탐색 돌아보기")
-    reflection_exploration(db,owner)
+    st.caption("한 칸에 오늘의 공부 이야기를 자유롭게 적어 보세요. 공부하며 느낀 점, 관심 전공에 대한 생각이나 더 궁금한 점도 같은 칸에 이어 쓸 수 있어요.")
+    question_data=st.session_state.get("diary_ai_question") or {}
+    if question_data.get("owner")==owner and question_data.get("question"):
+        st.markdown("**AI가 내 글을 읽고 물어본 질문**")
+        st.info(question_data["question"])
+        st.caption("답하고 싶다면 아래 학습일기에 이어 써 주세요. 답하지 않고 저장해도 괜찮아요.")
     text=st.text_area("오늘의 공부 이야기",key="diary_story",height=210,
-      placeholder="오늘 무엇을 공부했나요?\n어떤 부분이 도움이 됐고 무엇이 어려웠나요?\n흥미로웠던 주제나 다음에 해 보고 싶은 공부가 있다면 편하게 적어 보세요.")
+      placeholder="오늘 무엇을 공부했나요?\n어떤 점이 흥미롭거나 어려웠나요?\n배운 내용과 관심 분야가 이어지는 느낌이 있었나요? 더 궁금한 내용도 자유롭게 적어 보세요.")
+    if st.button("AI가 내 글을 읽고 한 가지 더 물어보기",key="diary_ask_followup"):
+        if not text.strip():
+            st.warning("먼저 오늘 공부한 이야기를 적어 주세요.")
+        elif not client:
+            st.error("OpenAI API 키가 없어 실제 AI 질문을 만들 수 없어요.")
+        else:
+            try:
+                with st.spinner("내가 작성한 학습일기를 읽고 질문을 생각하는 중이에요"):
+                    prompt=ask_diary_followup(text,client,model,interest=interest_for(db,owner))
+                st.session_state["diary_ai_question"]={"owner":owner,"question":prompt}
+                st.rerun()
+            except Exception as exc:
+                st.error("AI 질문 생성 실패 · "+safe_error_message(exc))
     diary_controls=st.columns([1,1.6])
     if diary_controls[0].button("내 일지만 저장",key="diary_save_direct"):
         if text.strip():
@@ -153,11 +169,11 @@ def journal_form(db,owner,client,model):
                  json.dumps(draft.get("facts") or {},ensure_ascii=False),now()))
             st.success("내가 확인한 학습일지와 브리핑을 저장했어요.")
         b.caption("AI는 학생의 자기평가를 대신하지 않아요.")
-    with st.expander("내가 생각해 볼 질문 (선택)"):
-        if not draft.get("questions"):
-            st.caption("현재 글만으로 충분할 수 있어요.")
-        for q in draft.get("questions") or []:
-            st.write("• "+q)
+    if draft.get("questions"):
+        with st.expander("더 돌아보고 싶은 질문 · 선택"):
+            for q in draft["questions"]:
+                st.write("• "+q)
+            st.caption("답하고 싶으면 위의 학습일기 한 칸에 이어 적을 수 있어요.")
     st.markdown("### 내일로 이어지는 작은 목표")
     st.caption("AI가 정리한 후보는 선택 전까지 저장되지 않아요.")
     if not draft.get("goal_candidates"):
