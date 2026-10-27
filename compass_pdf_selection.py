@@ -50,64 +50,84 @@ def pdf_layers(raw):
 
 HTML="""<div class="pdf-selection-root">
   <div class="pdf-reader-head"><b>PDF 연속 읽기</b>
-    <span>본문 드래그 → 어려움, 흥미, 핵심, 질문 표시</span></div>
-  <div class="pdf-reader-viewport" tabindex="0" aria-label="PDF 연속 스크롤 뷰어"></div>
+    <span>글자를 드래그하면 바로 색상 선택 메뉴가 열려요</span></div>
+  <div class="pdf-reader-viewport" tabindex="0" aria-label="PDF 연속 스크롤 및 형광펜 뷰어"></div>
   <div class="pdf-mark-bar" hidden aria-live="polite">
+    <div class="pdf-mark-bar-title">어떤 내용으로 표시할까요?</div>
     <span class="pdf-selected-quote"></span>
     <div class="pdf-mark-actions"></div>
     <button type="button" class="pdf-cancel">취소</button>
   </div>
-  <div class="pdf-reader-foot">드래그가 어려우면 아래 문단 목록에서도 선택할 수 있어요.</div>
+  <div class="pdf-color-legend">
+    <span style="background:#ffd1d4">어려움</span>
+    <span style="background:#cfe3ff">흥미</span>
+    <span style="background:#ffefab">핵심</span>
+    <span style="background:#c8f0d9">질문</span>
+  </div>
+  <div class="pdf-reader-foot">표시는 선택한 구절에 색으로 남고 ‘내 기록’에 저장돼요. 글자 선택이 어려우면 아래 문단 선택을 이용해요.</div>
 </div>"""
 
 CSS="""
-.pdf-selection-root{font-family:system-ui,'Apple SD Gothic Neo',sans-serif;color:#203c37;}
-.pdf-reader-head{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:9px 12px;
- background:#e8f4ed;border-radius:12px 12px 0 0;font-size:13px;}
+.pdf-selection-root{position:relative;font-family:system-ui,'Apple SD Gothic Neo',sans-serif;color:#203c37;}
+.pdf-reader-head{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;
+ background:#e8f4ed;border-radius:12px 12px 0 0;font-size:13px;flex-wrap:wrap;}
 .pdf-reader-head span{font-size:12px;color:#506963}
-.pdf-reader-viewport{height:68vh;min-height:450px;overflow-y:auto;background:#e2e9e5;padding:14px 9px;
+.pdf-reader-viewport{height:68vh;min-height:430px;overflow-y:auto;background:#e2e9e5;padding:14px 9px;
  border:1px solid #cddad4;overscroll-behavior:contain;touch-action:pan-y;}
 .pdf-page{max-width:840px;min-width:240px;width:100%;position:relative;margin:0 auto 15px;
  box-shadow:0 4px 14px #1d39331b;background:white;container-type:inline-size;}
 .pdf-page img{display:block;width:100%;height:auto;pointer-events:none;user-select:none;-webkit-user-drag:none;}
 .pdf-page-num{position:absolute;bottom:2px;right:7px;font-size:11px;color:#657875;
- background:#ffffffd9;padding:2px 5px;border-radius:4px;z-index:2;pointer-events:none;}
-.pdf-text-layer{position:absolute;inset:0;overflow:hidden;user-select:text;-webkit-user-select:text;}
+ background:#ffffffd9;padding:2px 5px;border-radius:4px;z-index:5;pointer-events:none;}
+.pdf-highlight-layer{position:absolute;inset:0;z-index:1;pointer-events:none;mix-blend-mode:multiply;overflow:hidden;}
+.pdf-highlight-patch{position:absolute;border-radius:2px;opacity:.67;pointer-events:none;}
+.pdf-text-layer{position:absolute;inset:0;z-index:2;overflow:hidden;user-select:text;-webkit-user-select:text;}
 .pdf-text-span{position:absolute;white-space:pre;user-select:text;-webkit-user-select:text;
  font-family:Arial,sans-serif;line-height:1.1;color:transparent;cursor:text;transform-origin:top left;}
-.pdf-text-span::selection{background:rgba(36,164,111,.48);color:transparent;}
-.pdf-text-span.saved{background:rgba(248,188,79,.36);border-radius:1px;}
-.pdf-mark-bar{display:flex;flex-direction:column;gap:8px;padding:11px 13px;background:#f5faf5;
- border:1px solid #bdd3c7;border-radius:0 0 12px 12px;}
+.pdf-text-span::selection{background:rgba(36,164,111,.40);color:transparent;}
+.pdf-mark-bar{position:absolute;z-index:30;display:flex;flex-direction:column;gap:7px;
+ width:min(355px,calc(100% - 12px));padding:11px 12px;
+ border:1px solid #d5e0d9;border-radius:13px;background:#fff;
+ box-shadow:0 10px 28px rgba(21,48,43,.27);}
 .pdf-mark-bar[hidden]{display:none!important;}
-.pdf-selected-quote{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
- font-size:13px;line-height:1.45;}
-.pdf-mark-actions{display:flex;gap:7px;flex-wrap:wrap;}
-.pdf-mark-actions button,.pdf-cancel{border-radius:10px;border:1px solid #afc9bc;
- padding:7px 11px;font-weight:600;font-size:12px;background:white;color:#165449;cursor:pointer;}
-.pdf-mark-actions button:hover{background:#dcefe4;}
-.pdf-reader-foot{font-size:11px;color:#63766f;margin-top:5px}
+.pdf-mark-bar-title{font-size:12px;color:#566e66;font-weight:700;}
+.pdf-selected-quote{font-size:12px;color:#405852;line-height:1.5;display:-webkit-box;
+ -webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
+.pdf-mark-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+.pdf-mark-actions button{border-radius:999px;border:1px solid transparent;padding:8px 11px;
+ font-weight:750;font-size:12px;cursor:pointer;color:#2e4541;min-height:36px;}
+.pdf-mark-actions button:hover{filter:brightness(.95);transform:translateY(-1px);}
+.pdf-mark-actions button:focus-visible{outline:3px solid #165e55;outline-offset:2px;}
+.pdf-cancel{border:0;padding:6px 8px;font-size:12px;color:#54766d;background:transparent;
+ cursor:pointer;align-self:flex-end;}
+.pdf-reader-foot{font-size:11px;color:#63766f;margin-top:6px}
+.pdf-color-legend{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;margin-top:5px;}
+.pdf-color-legend span{padding:3px 9px;border-radius:8px;font-weight:700;color:#33403d;}
 """
 
 JS=r"""
 export default function ({parentElement,data,setTriggerValue}) {
   const root=parentElement.querySelector(".pdf-selection-root");
-  const viewport=root.querySelector(".pdf-reader-viewport");
-  const toolbar=root.querySelector(".pdf-mark-bar");
-  const quote=root.querySelector(".pdf-selected-quote");
-  const actions=root.querySelector(".pdf-mark-actions");
-  const cancel=root.querySelector(".pdf-cancel");
-  if(!viewport || !data) return;
-  const documentId=data.material_id;
-  const selectedTypes=["어려움","흥미","핵심","질문"];
-  let selected=null;
-  const pages=Array.isArray(data.pages)?data.pages:[];
-  const marked=Array.isArray(data.marks)?data.marks:[];
+  const viewport=root?.querySelector(".pdf-reader-viewport");
+  const toolbar=root?.querySelector(".pdf-mark-bar");
+  const quote=root?.querySelector(".pdf-selected-quote");
+  const actions=root?.querySelector(".pdf-mark-actions");
+  const cancel=root?.querySelector(".pdf-cancel");
+  if(!root || !viewport || !toolbar || !data) return;
 
-  // Replace children of this data placeholder only, never parentElement.innerHTML.
-  // Preserve the reader position when a Streamlit widget changes elsewhere.
+  const palette={
+    "어려움":{fill:"#ff9fa5",button:"#ffd1d4",border:"#db8890"},
+    "흥미":{fill:"#9ac6ff",button:"#cfe3ff",border:"#8dafde"},
+    "핵심":{fill:"#ffe478",button:"#ffefab",border:"#e0c556"},
+    "질문":{fill:"#9be4bc",button:"#c8f0d9",border:"#84cda3"}
+  };
+  const documentId=data.material_id;
+  const pages=Array.isArray(data.pages)?data.pages:[];
+  const marks=Array.isArray(data.marks)?data.marks.slice():[];
+  let selected=null;
   const sameDocument=viewport.dataset.documentId===documentId;
   const previousScroll=sameDocument?viewport.scrollTop:null;
+
   viewport.replaceChildren();
   viewport.dataset.documentId=documentId;
   for(const pg of pages) {
@@ -120,6 +140,8 @@ export default function ({parentElement,data,setTriggerValue}) {
     img.alt="PDF "+pg.page+"쪽";
     img.loading=pg.page>4?"lazy":"eager";
     img.draggable=false;
+    const ink=document.createElement("div");
+    ink.className="pdf-highlight-layer";
     const layer=document.createElement("div");
     layer.className="pdf-text-layer";
     for(const span of (pg.spans||[])) {
@@ -128,26 +150,17 @@ export default function ({parentElement,data,setTriggerValue}) {
       el.style.left=span.x+"%";
       el.style.top=span.y+"%";
       el.style.fontSize=span.size+"cqw";
-      el.textContent=span.text;
-      el.appendChild(document.createTextNode(" "));
-      const plain=span.text.trim();
-      if(plain && marked.some(m=>m.page===pg.page &&
-            (m.text.includes(plain) || (plain.length>8 && plain.includes(m.text))))) {
-         el.classList.add("saved");
-      }
+      el.textContent=span.text+" ";
       layer.appendChild(el);
     }
     const badge=document.createElement("span");
     badge.className="pdf-page-num";
-    badge.textContent=pg.page+" / "+pages.length;
-    wrapper.append(img,layer,badge);
+    badge.textContent=pg.page+" / "+pages.length+"쪽";
+    wrapper.append(img,ink,layer,badge);
     viewport.appendChild(wrapper);
   }
-  if(previousScroll!==null) {
-    viewport.scrollTop=previousScroll;
-  } else if(Number.isFinite(data.scroll) && data.scroll>=0) {
-    viewport.scrollTop=data.scroll;
-  }
+  if(previousScroll!==null) viewport.scrollTop=previousScroll;
+  else if(Number.isFinite(data.scroll) && data.scroll>=0) viewport.scrollTop=data.scroll;
 
   function clearSelection() {
     selected=null;
@@ -155,45 +168,138 @@ export default function ({parentElement,data,setTriggerValue}) {
     const s=window.getSelection();
     if(s) s.removeAllRanges();
   }
-  const onPointerUp=()=>{
+  function closestPage(node) {
+    const el=node?.nodeType===1?node:node?.parentElement;
+    return el?.closest?.(".pdf-page")||null;
+  }
+  function clamp(number,low,high) {return Math.max(low,Math.min(number,high));}
+  function addRect(ink,rect,fill) {
+    if(!rect||typeof rect!=="object")return;
+    const values=["x","y","w","h"].map(k=>Number(rect[k]));
+    if(values.some(v=>!Number.isFinite(v)))return;
+    const [x,y,w,h]=values;
+    if(x<0||y<0||w<=0||h<=0||x+w>100.6||y+h>100.6)return;
+    const patch=document.createElement("div");
+    patch.className="pdf-highlight-patch";
+    patch.style.left=x+"%";patch.style.top=y+"%";
+    patch.style.width=w+"%";patch.style.height=h+"%";
+    patch.style.background=fill;
+    ink.appendChild(patch);
+  }
+  function drawMarks() {
+    for(const page of viewport.querySelectorAll(".pdf-page")) {
+      const ink=page.querySelector(".pdf-highlight-layer");
+      ink.replaceChildren();
+      const pageNum=Number(page.dataset.page);
+      const pageMarks=marks.filter(m=>Number(m.page)===pageNum && palette[m.kind]);
+      for(const mark of pageMarks) {
+        const fill=palette[mark.kind].fill;
+        const rects=Array.isArray(mark.rects)?mark.rects:[];
+        if(rects.length) {
+          for(const rect of rects) addRect(ink,rect,fill);
+        } else {
+          // Older PDF marks used only text. Retain their visible tint without
+          // claiming exact coordinates for previously stored selections.
+          const normalized=String(mark.text||"").replace(/\s+/g,"");
+          if(!normalized)continue;
+          for(const span of page.querySelectorAll(".pdf-text-span")) {
+            const term=(span.textContent||"").trim().replace(/\s+/g,"");
+            if(term.length>=4 && normalized.includes(term)) {
+              span.style.background=fill;
+              span.style.opacity=".52";
+            }
+          }
+        }
+      }
+    }
+  }
+  drawMarks();
+
+  // Measure only selected text rectangles, relative to the original PDF page.
+  function selectionRects(range,page) {
+    const bounds=page.getBoundingClientRect();
+    if(!bounds.width||!bounds.height) return [];
+    const rects=[];
+    for(const rectangle of Array.from(range.getClientRects()).slice(0,85)) {
+      const x=clamp(rectangle.left-bounds.left,0,bounds.width);
+      const y=clamp(rectangle.top-bounds.top,0,bounds.height);
+      const w=clamp(rectangle.right-bounds.left,0,bounds.width)-x;
+      const h=clamp(rectangle.bottom-bounds.top,0,bounds.height)-y;
+      if(w<1.5||h<2)continue;
+      rects.push({x:+(x/bounds.width*100).toFixed(3),
+                  y:+(y/bounds.height*100).toFixed(3),
+                  w:+(w/bounds.width*100).toFixed(3),
+                  h:+(h/bounds.height*100).toFixed(3)});
+    }
+    return rects;
+  }
+
+  function showBar() {
     const selection=window.getSelection();
-    if(!selection || selection.isCollapsed) return;
-    let value=selection.toString().trim().replace(/\s+/g," ");
-    if(value.length<2 || value.length>2500) return;
-    const node=selection.anchorNode;
-    const elem=node?.nodeType===1?node:node?.parentElement;
-    const from=elem?.closest?.(".pdf-text-layer");
-    if(!from || !viewport.contains(from)) return;
-    const page=from.closest(".pdf-page");
-    if(!page) return;
-    const pageNumber=Number(page.dataset.page);
-    selected={text:value,page:pageNumber,doc:documentId};
-    quote.textContent="선택한 글: "+value.slice(0,300)+(value.length>300?"…":"");
+    if(!selection || selection.isCollapsed || !selection.rangeCount)return;
+    const text=selection.toString().trim().replace(/\s+/g," ");
+    if(text.length<2 || text.length>1600)return;
+    const range=selection.getRangeAt(0);
+    const page=closestPage(range.startContainer);
+    // Only accept PDF text layer selections. Reject browser text outside PDF.
+    const first=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
+    if(!page||!viewport.contains(page)||!first?.closest?.(".pdf-text-layer"))return;
+    const last=closestPage(range.endContainer);
+    if(last!==page)return; // Mark one page at a time for accurate storage.
+    const rects=selectionRects(range,page);
+    if(!rects.length)return;
+    selected={text,page:Number(page.dataset.page),doc:documentId,rects};
+    quote.textContent="선택한 글: "+text.slice(0,160)+(text.length>160?"…":"");
     toolbar.hidden=false;
-  };
-  viewport.addEventListener("mouseup",onPointerUp);
-  viewport.addEventListener("touchend",onPointerUp);
+    // Position immediately beside the selection, as in the former Claude PDF app.
+    const r=range.getBoundingClientRect(),base=root.getBoundingClientRect();
+    const above=r.top-base.top-toolbar.offsetHeight-9;
+    const below=r.bottom-base.top+9;
+    const top=(above>=4)?above:below;
+    toolbar.style.top=clamp(top,4,Math.max(4,root.clientHeight-toolbar.offsetHeight-4))+"px";
+    toolbar.style.left=clamp(r.left-base.left,5,Math.max(5,root.clientWidth-toolbar.offsetWidth-5))+"px";
+  }
+  const onMouseUp=()=>setTimeout(showBar,25);
+  const onTouchEnd=()=>setTimeout(showBar,350);
+  viewport.addEventListener("mouseup",onMouseUp);
+  viewport.addEventListener("touchend",onTouchEnd);
+  toolbar.addEventListener("mousedown",e=>e.preventDefault());
   actions.replaceChildren();
-  for(const kind of selectedTypes) {
-    const btn=document.createElement("button"); btn.type="button";btn.textContent=kind;
+
+  for(const kind of Object.keys(palette)) {
+    const btn=document.createElement("button");
+    const c=palette[kind];
+    btn.type="button";
+    btn.textContent=kind;
+    btn.style.background=c.button;
+    btn.style.borderColor=c.border;
+    btn.setAttribute("aria-label","선택한 글을 "+kind+" 색으로 표시");
+    btn.onmousedown=e=>e.preventDefault();
     btn.onclick=()=>{
-      if(!selected || selected.doc!==documentId) return;
-      const eventId=(typeof crypto!=="undefined"&&crypto.randomUUID)?
+      if(!selected || selected.doc!==documentId)return;
+      const item={page:selected.page,text:selected.text,kind,rects:selected.rects};
+      marks.push(item);
+      drawMarks(); // Color appears immediately, before the app saves the record.
+      const eventId=(typeof crypto!=="undefined" && crypto.randomUUID)?
           crypto.randomUUID():String(Date.now())+Math.random();
       setTriggerValue("marked",{
-         event_id:eventId,material_id:documentId,page:selected.page,
-         text:selected.text,kind:kind,scroll:viewport.scrollTop
+        event_id:eventId,material_id:documentId,page:selected.page,
+        text:selected.text,kind,rects:selected.rects,scroll:viewport.scrollTop
       });
       clearSelection();
     };
     actions.appendChild(btn);
   }
   cancel.onclick=clearSelection;
-  return ()=>{ viewport.removeEventListener("mouseup",onPointerUp);
-                viewport.removeEventListener("touchend",onPointerUp); };
+  const onScroll=()=>{if(!toolbar.hidden)toolbar.hidden=true;};
+  viewport.addEventListener("scroll",onScroll,{passive:true});
+  return ()=>{
+    viewport.removeEventListener("mouseup",onMouseUp);
+    viewport.removeEventListener("touchend",onTouchEnd);
+    viewport.removeEventListener("scroll",onScroll);
+  };
 }
 """
-
 def component_available():
     try:
         return hasattr(st.components,"v2") and hasattr(st.components.v2,"component")
