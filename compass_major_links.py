@@ -92,21 +92,21 @@ def ask_ai(client,model,course,topic,excerpt,major,question,interest):
 
 def goal_exploration(db,owner):
     """Display only within '목표와 계획' interest expander."""
-    with st.expander("수업에서 생긴 관심을 나의 탐색 목표로 연결하기 · 선택"):
-        st.caption("아직 전공을 정하지 않아도 돼요. 공부한 내용에서 궁금해진 점을 목표로 정할 수 있어요.")
-        with st.form("major_goal_from_course",clear_on_submit=True):
-            a,b=st.columns(2)
-            course=a.text_input("지금 공부하는 교과목 (선택)",placeholder="예: 심리학개론")
-            major=b.text_input("관심 전공이나 분야 (선택)",placeholder="예: 심리학 또는 아직 잘 모르겠음")
-            question=st.text_input("수업을 통해 알아보고 싶은 점",
-                             placeholder="예: 기억과 학습을 전공에서는 어떻게 더 깊게 공부할까?")
-            if st.form_submit_button("내 탐색 목표에 연결"):
-                if not question.strip(): st.warning("알아보고 싶은 점을 작성해 주세요.")
-                else:
-                    save_link(db,owner,course,"", "", question,major,question)
-                    st.success("학생이 정한 탐색 질문을 기록했어요. 공부하기와 학습일지에도 연결돼요.")
-        if linked_rows(db,owner,limit=1):
-            st.caption("탐색 내용을 바탕으로 학습목표를 정하거나 수정하는 것은 내가 직접 결정해요.")
+    st.markdown("**교과목에서 생긴 관심을 탐색 질문으로 연결하기**")
+    st.caption("아직 전공을 정하지 않아도 돼요. 공부한 내용에서 궁금해진 점을 목표로 정할 수 있어요.")
+    with st.form("major_goal_from_course",clear_on_submit=True):
+        a,b=st.columns(2)
+        course=a.text_input("지금 공부하는 교과목 (선택)",placeholder="예: 심리학개론")
+        major=b.text_input("관심 전공이나 분야 (선택)",placeholder="예: 심리학 또는 아직 잘 모르겠음")
+        question=st.text_input("수업을 통해 알아보고 싶은 점",
+                         placeholder="예: 기억과 학습을 전공에서는 어떻게 더 깊게 공부할까?")
+        if st.form_submit_button("내 탐색 목표에 연결"):
+            if not question.strip(): st.warning("알아보고 싶은 점을 작성해 주세요.")
+            else:
+                save_link(db,owner,course,"", "", question,major,question)
+                st.success("학생이 정한 탐색 질문을 기록했어요. 공부하기와 학습일지에도 연결돼요.")
+    if linked_rows(db,owner,limit=1):
+        st.caption("탐색 내용을 바탕으로 학습목표를 정하거나 수정하는 것은 내가 직접 결정해요.")
 
 
 def study_exploration(db,owner,client,model,course,topic):
