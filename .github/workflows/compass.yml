@@ -8,6 +8,7 @@ on:
       - dev/independent-learning-20261027
       - dev/pdf-floating-color-menu-20261027
       - dev/highlight-strategy-cards-20261027
+      - dev/pdf-toolbar-hotfix-20261027
   workflow_dispatch:
 jobs:
   compass:
