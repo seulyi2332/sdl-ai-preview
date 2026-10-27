@@ -12,6 +12,8 @@ from compass_progress import (save_criterion,criterion_for,save_time,
                               latest_time,time_summaries,revise_goal,adjustments)
 from compass_feedback import make_feedback
 from compass_pdf_selection import pdf_layers,selection_key,JS,HTML
+from compass_pdf_selection import readable_ratio
+from compass_independence import choice as record_strategy,recent as selected_methods,student_chosen_card
 
 
 class FakeResponses:
@@ -136,6 +138,48 @@ class PdfAppMountTests(unittest.TestCase):
         app.text_input(key="participant_access_code").set_value("S01").run()
         app.radio(key="compass_page").set_value("공부하기").run()
         self.assertFalse(app.exception,[str(e.message) for e in app.exception])
+
+
+class IndependentLearningTests(unittest.TestCase):
+    def setUp(self):
+        self.db=connect()
+        record_strategy(self.db,"S00","테스트","", "compare","student")
+        self.db.execute("DELETE FROM compass_strategy_choices")
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_student_strategy_choice_is_not_ai_decision(self):
+        record_strategy(self.db,"S01","경제학","기회비용","compare","student")
+        record_strategy(self.db,"S01","경제학","기회비용","recall","ai_suggestion")
+        record_strategy(self.db,"S02","경제학","기회비용","own_example","student")
+        methods=selected_methods(self.db,"S01","경제학")
+        self.assertEqual(2,len(methods))
+        self.assertEqual(["ai_suggestion","student"],[m["choice_source"] for m in methods])
+        self.assertEqual([],selected_methods(self.db,"S03","경제학"))
+        with self.assertRaises(ValueError):
+            record_strategy(self.db,"S01","경제학","기회비용","fake","student")
+        with self.assertRaises(ValueError):
+            record_strategy(self.db,"S01","경제학","기회비용","compare","automatic")
+        card=student_chosen_card("compare")
+        self.assertEqual("student_selected",card["source"])
+        self.assertNotIn("점수",card["reason"])
+
+    def test_pdf_keeps_position_and_prevents_broken_text(self):
+        self.assertIn("previousScroll",JS)
+        self.assertIn("sameDocument",JS)
+        self.assertIn("aspectRatio=pg.width",JS)
+        self.assertGreater(readable_ratio("기회비용은 포기한 대안 중 가치가 가장 높은 것"),0.9)
+        self.assertLess(readable_ratio("☐☐☐☐☐☐☐☐"),0.65)
+
+    def test_student_method_choice_is_visible_in_study_app(self):
+        from streamlit.testing.v1 import AppTest
+        entry=os.path.join(os.path.dirname(os.path.dirname(__file__)),"ai_preview_app.py")
+        app=AppTest.from_file(entry,default_timeout=60).run()
+        app.text_input(key="participant_access_code").set_value("S11").run()
+        app.radio(key="compass_page").set_value("공부하기").run()
+        self.assertFalse(app.exception,[str(e.message) for e in app.exception])
+        self.assertTrue(any("공부 방법 골라보기" in x.label for x in app.expander))
 
 
 if __name__=="__main__":
