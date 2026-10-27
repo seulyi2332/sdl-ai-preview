@@ -7,6 +7,7 @@ on:
       - dev/compass-principles-20261027
       - dev/independent-learning-20261027
       - dev/pdf-floating-color-menu-20261027
+      - dev/highlight-strategy-cards-20261027
   workflow_dispatch:
 jobs:
   compass:
@@ -39,6 +40,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_compass.py' -v
       - name: Test student-owned progress and feedback
         run: python -m unittest discover -s tests -p 'test_compass_progress.py' -v
+      - name: Test highlight keywords and 60 strategy cards
+        run: python -m unittest discover -s tests -p 'test_compass_highlights_cards.py' -v
       - name: Test existing learning strategy/diary core
         run: python -m unittest discover -s tests -p 'test_ai_upgrade.py' -v
       - name: Verify server health
