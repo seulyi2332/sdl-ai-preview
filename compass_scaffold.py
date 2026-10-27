@@ -136,7 +136,20 @@ def render(db,owner,client,model,course,topic,excerpt):
                     except Exception as exc:
                         st.error("AI 도움 생성 실패 · "+safe_error_message(exc))
         else:
-            st.caption("필요한 세 단계의 도움을 살펴봤어요. 내 풀이를 다시 고치거나 다른 문제를 선택해도 돼요.")
+            st.caption("세 단계의 도움을 확인했어요. 마지막 답을 학생이 직접 다시 작성해 기록할 수 있어요.")
+            with st.form("scaffold_final_retry_"+session["id"],clear_on_submit=True):
+                final_retry=st.text_area("도움 이후 내가 다시 설명하거나 푼 내용 (선택)",height=100,
+                    placeholder="처음 답에서 바꾼 생각과 그 근거를 내 말로 정리해 보세요.")
+                save_retry=st.form_submit_button("내 재시도 기록 저장")
+            if save_retry:
+                if not final_retry.strip():
+                    st.warning("내가 다시 생각한 내용을 적어 주세요.")
+                else:
+                    db.execute("""UPDATE compass_scaffold_steps SET student_retry=?
+                        WHERE id=? AND owner=?""",
+                        (final_retry.strip()[:2200],history[-1]["id"],owner))
+                    st.success("내가 수정한 생각을 학습기록에 저장했어요.")
+                    st.rerun()
         if st.button("새 학습 문제로 다시 시작",key="scaffold_restart_"+session["id"]):
             st.session_state.pop("scaffold_session_id",None)
             st.rerun()
