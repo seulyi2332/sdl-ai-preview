@@ -21,6 +21,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_ai_upgrade.py' -v
           python -m py_compile ai_preview_app.py compass_*.py sdl_upgrade/*.py
           python -m unittest discover -s tests -p 'test_compass.py' -v
+          python -m unittest discover -s tests -p 'test_compass_flow_links.py' -v
       - name: Render Streamlit view
         run: |
           python - <<'PY'
