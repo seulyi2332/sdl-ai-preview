@@ -51,15 +51,15 @@ def pdf_layers(raw):
 HTML="""<div class="pdf-selection-root">
   <div class="pdf-reader-head"><b>PDF 연속 읽기</b>
     <span>글자를 드래그하면 바로 색상 선택 메뉴가 열려요</span></div>
-  <div class="pdf-reader-viewport" tabindex="0" aria-label="PDF 연속 스크롤 및 형광펜 뷰어"></div>
   <div class="pdf-mark-bar" hidden aria-live="polite">
     <div class="pdf-mark-bar-title">어떤 내용으로 표시할까요?</div>
     <span class="pdf-selected-quote"></span>
     <div class="pdf-mark-actions"></div>
     <button type="button" class="pdf-cancel">취소</button>
   </div>
-  <div class="pdf-selection-fallback"><span>글자를 드래그했는데 메뉴가 안 뜨나요?</span>
+  <div class="pdf-selection-fallback"><span class="pdf-selection-status" aria-live="polite">글자를 드래그하면 선택 메뉴가 나타나요.</span>
     <button type="button" class="pdf-retry-selection">선택한 글 표시하기</button></div>
+  <div class="pdf-reader-viewport" tabindex="0" aria-label="PDF 연속 스크롤 및 형광펜 뷰어"></div>
   <div class="pdf-color-legend">
     <span style="background:#ffd1d4">어려움</span>
     <span style="background:#cfe3ff">흥미</span>
@@ -87,8 +87,8 @@ CSS="""
 .pdf-text-span{position:absolute;white-space:pre;user-select:text;-webkit-user-select:text;
  font-family:Arial,sans-serif;line-height:1.1;color:transparent;cursor:text;transform-origin:top left;}
 .pdf-text-span::selection{background:rgba(36,164,111,.40);color:transparent;}
-.pdf-mark-bar{position:absolute;z-index:30;display:flex;flex-direction:column;gap:7px;
- width:min(355px,calc(100% - 12px));padding:11px 12px;
+.pdf-mark-bar{position:relative;z-index:30;display:flex;flex-direction:column;gap:7px;
+ width:100%;box-sizing:border-box;padding:11px 12px;
  border:1px solid #d5e0d9;border-radius:13px;background:#fff;
  box-shadow:0 10px 28px rgba(21,48,43,.27);}
 .pdf-mark-bar[hidden]{display:none!important;}
@@ -121,6 +121,7 @@ export default function ({parentElement,data,setTriggerValue}) {
   const actions=root?.querySelector(".pdf-mark-actions");
   const cancel=root?.querySelector(".pdf-cancel");
   const retry=root?.querySelector(".pdf-retry-selection");
+  const status=root?.querySelector(".pdf-selection-status");
   if(!root || !viewport || !toolbar || !data) return;
 
   const palette={
@@ -133,6 +134,9 @@ export default function ({parentElement,data,setTriggerValue}) {
   const pages=Array.isArray(data.pages)?data.pages:[];
   const marks=Array.isArray(data.marks)?data.marks.slice():[];
   let selected=null;
+  let dragStart=null;
+  let dragEnd=null;
+  let lastPointerPage=null;
   const sameDocument=viewport.dataset.documentId===documentId;
   const previousScroll=sameDocument?viewport.scrollTop:null;
 
@@ -171,22 +175,51 @@ export default function ({parentElement,data,setTriggerValue}) {
   else if(Number.isFinite(data.scroll) && data.scroll>=0) viewport.scrollTop=data.scroll;
 
   function currentSelection() {
-    // Streamlit components can render within a shadow root. Chrome and
-    // other browsers may expose the actual text range on the shadow root
-    // rather than on window.getSelection().
+    // Text selection can be attached to either the component shadow root
+    // or the document; prefer a selection containing readable text.
     const tree=root.getRootNode();
-    let local=null;
+    const candidates=[];
+    try {if(tree && typeof tree.getSelection==="function") candidates.push(tree.getSelection());} catch(e) {}
+    try {candidates.push(window.getSelection());} catch(e) {}
+    try {candidates.push(document.getSelection());} catch(e) {}
+    return candidates.find(s=>s && !s.isCollapsed && s.toString().trim())||null;
+  }
+  function caretAt(event) {
+    const doc=root.ownerDocument;
+    const tree=root.getRootNode();
     try {
-      if(tree && typeof tree.getSelection==="function") local=tree.getSelection();
+      const options=tree!==doc ? {shadowRoots:[tree]} : {};
+      const pos=doc.caretPositionFromPoint?.(event.clientX,event.clientY,options);
+      if(pos?.offsetNode) return {node:pos.offsetNode,offset:pos.offset};
     } catch(e) {}
-    return (local && !local.isCollapsed && local.toString().trim())?
-            local:window.getSelection();
+    try {
+      const range=doc.caretRangeFromPoint?.(event.clientX,event.clientY);
+      if(range) return {node:range.startContainer,offset:range.startOffset};
+    } catch(e) {}
+    return null;
+  }
+  function rangeFromDrag(start,end) {
+    if(!start?.node || !end?.node) return null;
+    try {
+      const r=document.createRange();
+      r.setStart(start.node,start.offset);
+      const point=r.comparePoint(end.node,end.offset);
+      if(point<0) {
+        r.setStart(end.node,end.offset);
+        r.setEnd(start.node,start.offset);
+      } else {
+        r.setEnd(end.node,end.offset);
+      }
+      return r.toString().trim()?r:null;
+    } catch(e) {return null;}
   }
   function clearSelection() {
     selected=null;
     toolbar.hidden=true;
     const s=currentSelection();
     if(s) s.removeAllRanges();
+    dragStart=null;
+    dragEnd=null;
   }
   function closestPage(node) {
     const el=node?.nodeType===1?node:node?.parentElement;
@@ -256,11 +289,21 @@ export default function ({parentElement,data,setTriggerValue}) {
 
   function showBar() {
     const selection=currentSelection();
-    if(!selection || selection.isCollapsed)return;
-    const text=selection.toString().trim().replace(/\s+/g," ");
-    if(text.length<2 || text.length>1600)return;
-    let range=null;
-    if(selection.rangeCount) range=selection.getRangeAt(0);
+    let range=selection?.rangeCount?selection.getRangeAt(0):null;
+    let text=selection?selection.toString().trim().replace(/\s+/g," "):"";
+    // Some browsers retarget shadow DOM selections to the host element.
+    // Recover the exact selected range from the pointer endpoints if necessary.
+    if(!text || !range || !viewport.contains(range.startContainer)) {
+      const dragged=rangeFromDrag(dragStart,dragEnd);
+      if(dragged && viewport.contains(dragged.startContainer)) {
+        range=dragged;
+        text=dragged.toString().trim().replace(/\s+/g," ");
+      }
+    }
+    if(text.length<2 || text.length>1600) {
+      if(status)status.textContent="선택한 문장을 읽지 못했어요. 다시 드래그하거나 아래 문단 목록을 이용해 주세요.";
+      return;
+    }
     // A text range selected inside Streamlit's component shadow root
     // can be retargeted to the host. Recover the page by its viewport box.
     const r=range?range.getBoundingClientRect():null;
@@ -272,7 +315,11 @@ export default function ({parentElement,data,setTriggerValue}) {
                r.right>box.left && r.left<box.right;
       })||null;
     }
-    if(!page||!viewport.contains(page))return;
+    if(!page && lastPointerPage && viewport.contains(lastPointerPage)) page=lastPointerPage;
+    if(!page||!viewport.contains(page)) {
+      if(status)status.textContent="선택한 쪽을 확인하지 못했어요. 한 쪽 안에서 다시 드래그해 주세요.";
+      return;
+    }
     const last=range?closestPage(range.endContainer):null;
     if(last && last!==page)return; // Cross-page selections are not saved.
     let rects=range?selectionRects(range,page):[];
@@ -287,23 +334,35 @@ export default function ({parentElement,data,setTriggerValue}) {
     selected={text,page:Number(page.dataset.page),doc:documentId,rects};
     quote.textContent="선택한 글: "+text.slice(0,160)+(text.length>160?"…":"");
     toolbar.hidden=false;
-    // Position immediately beside the selection, as in the former Claude PDF app.
-    const base=root.getBoundingClientRect();
-    const viewportBox=viewport.getBoundingClientRect();
-    const tip=r||viewportBox;
-    const above=tip.top-base.top-toolbar.offsetHeight-9;
-    const below=tip.bottom-base.top+9;
-    const top=(above>=4)?above:below;
-    toolbar.style.top=clamp(top,4,Math.max(4,root.clientHeight-toolbar.offsetHeight-4))+"px";
-    toolbar.style.left=clamp(tip.left-base.left,5,Math.max(5,root.clientWidth-toolbar.offsetWidth-5))+"px";
+    if(status) status.textContent="선택한 글 "+text.length+"자 · 위에서 표시 유형을 선택하세요.";
+    // Keep the toolbar above the inner PDF scroller so it cannot be clipped
+    // by Streamlit's expander or appear outside the visible reader area.
   }
   let selectionTimer=null;
-  const onMouseUp=()=>setTimeout(showBar,25);
-  const onTouchEnd=()=>setTimeout(showBar,350);
+  const pointerPage=event=>{
+    const path=typeof event.composedPath==="function"?event.composedPath():[];
+    return path.find(n=>n?.classList?.contains?.("pdf-page"))||
+           event.target?.closest?.(".pdf-page")||null;
+  };
+  const onPointerDown=event=>{
+    dragStart=caretAt(event);
+    dragEnd=null;
+    lastPointerPage=pointerPage(event);
+  };
+  const onMouseUp=event=>{
+    dragEnd=caretAt(event);
+    lastPointerPage=pointerPage(event)||lastPointerPage;
+    setTimeout(showBar,45);
+  };
+  const onTouchEnd=event=>{
+    lastPointerPage=pointerPage(event)||lastPointerPage;
+    setTimeout(showBar,350);
+  };
   const onSelectionChange=()=>{
     if(selectionTimer!==null)clearTimeout(selectionTimer);
     selectionTimer=setTimeout(showBar,450);
   };
+  viewport.addEventListener("pointerdown",onPointerDown);
   viewport.addEventListener("mouseup",onMouseUp);
   viewport.addEventListener("pointerup",onMouseUp);
   viewport.addEventListener("touchend",onTouchEnd);
@@ -311,6 +370,7 @@ export default function ({parentElement,data,setTriggerValue}) {
   const rootNode=root.getRootNode();
   if(rootNode!==document) rootNode.addEventListener("selectionchange",onSelectionChange);
   if(retry) {
+    retry.onpointerdown=e=>e.preventDefault();
     retry.onmousedown=e=>e.preventDefault();
     retry.onclick=showBar;
   }
@@ -345,6 +405,7 @@ export default function ({parentElement,data,setTriggerValue}) {
   const onScroll=()=>{if(!toolbar.hidden)toolbar.hidden=true;};
   viewport.addEventListener("scroll",onScroll,{passive:true});
   return ()=>{
+    viewport.removeEventListener("pointerdown",onPointerDown);
     viewport.removeEventListener("mouseup",onMouseUp);
     viewport.removeEventListener("pointerup",onMouseUp);
     viewport.removeEventListener("touchend",onTouchEnd);
