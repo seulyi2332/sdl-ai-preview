@@ -1,5 +1,6 @@
 """학생 원문에 근거해 성찰을 정리하고 승인 전 초안을 만드는 모듈."""
 import json
+from .model_client import complete_json
 
 CATEGORIES = ("studied","well","difficult","strategy","reason","emotion",
               "interest","next_topic","perceived_change")
@@ -60,9 +61,5 @@ def analyze_diary(diary, previous_diaries, client, model="gpt-4o-mini"):
         raise ValueError("학습일지를 먼저 작성해 주세요.")
     payload={"diary":diary[:10000],
              "previous_diaries":previous_diaries[:4000] or None}
-    response=client.chat.completions.create(
-        model=model,temperature=0.2,response_format={"type":"json_object"},
-        messages=[{"role":"system","content":SYSTEM},
-                  {"role":"user","content":json.dumps(payload,ensure_ascii=False)}])
-    data=json.loads(response.choices[0].message.content or "{}")
+    data=complete_json(client,model,SYSTEM,payload)
     return validate_draft(data,diary)
