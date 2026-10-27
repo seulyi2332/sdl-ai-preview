@@ -126,6 +126,17 @@ class ScrollablePdfTests(unittest.TestCase):
         self.assertIn("position:absolute",CSS)
         self.assertIn("document.addEventListener",JS)
 
+    def test_selection_toolbar_handles_streamlit_shadow_root_and_has_fallback(self):
+        from compass_pdf_selection import JS,HTML,CSS
+        self.assertIn("root.getRootNode()",JS)
+        self.assertIn("getSelection",JS)
+        self.assertIn('viewport.addEventListener("pointerup"',JS)
+        self.assertIn('rootNode.addEventListener("selectionchange"',JS)
+        self.assertIn("retry.onclick=showBar",JS)
+        self.assertIn("pdf-retry-selection",HTML)
+        self.assertIn("pdf-mark-bar",CSS)
+        self.assertIn("toolbar.hidden=false",JS)
+
     def test_saved_pdf_highlights_preserve_selection_rectangles(self):
         db=connect()
         material_id=add_material(db,"S07","public-example.pdf",b"%PDF",[],1)
