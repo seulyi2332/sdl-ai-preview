@@ -3,6 +3,7 @@ import html
 import streamlit as st
 from compass_store import all_rows,task_rows,add_task,change_task,ident,now,STATES,interest_for,save_interest
 from compass_progress import criterion_for,save_criterion,save_time,latest_time,revise_goal,adjustments
+from compass_major_links import goal_exploration
 
 VISIBLE=STATES[:4]
 LABELS={"시작 전":"○ 시작 전","진행 중":"◐ 진행 중",
@@ -214,6 +215,7 @@ def goal_view(db,owner,client,model):
             if st.form_submit_button("내 관심 분야 저장"):
                 save_interest(db,owner,majors)
                 st.success("내가 입력한 관심 분야를 저장했어요.")
+        goal_exploration(db,owner)
     st.caption("관심 전공 정보가 없어도 모든 기능을 이용할 수 있어요.")
     goals=active_goals(db,owner)
     if not goals:
