@@ -11,6 +11,7 @@ from compass_store import connect,add_task,task_rows
 from compass_progress import (save_criterion,criterion_for,save_time,
                               latest_time,time_summaries,revise_goal,adjustments)
 from compass_feedback import make_feedback
+from compass_pdf_selection import pdf_layers,selection_key,JS,HTML
 
 
 class FakeResponses:
@@ -85,6 +86,33 @@ class FeedbackTests(unittest.TestCase):
         self.assertIn("저는 기회비용",request["input"][0]["content"])
         self.assertIn("기회비용은 포기한 대안",request["input"][0]["content"])
         self.assertIn("사용자 요청 없이",request["instructions"])
+
+
+class ScrollablePdfTests(unittest.TestCase):
+    def test_continuous_two_page_pdf_with_text_layer(self):
+        import fitz
+        doc=fitz.open()
+        first=doc.new_page()
+        first.insert_text((70,100),"Chapter one learning concept")
+        second=doc.new_page()
+        second.insert_text((70,100),"Chapter two reflection strategy")
+        pdf=doc.tobytes()
+        doc.close()
+        pages=pdf_layers(pdf)
+        self.assertEqual(2,len(pages))
+        self.assertEqual([1,2],[p["page"] for p in pages])
+        self.assertTrue(all(x["image"].startswith("data:image/png;base64,") for x in pages))
+        self.assertTrue(any("learning" in x["text"] for x in pages[0]["spans"]))
+        self.assertTrue(any("reflection" in x["text"] for x in pages[1]["spans"]))
+        self.assertIn("overflow-y:auto",__import__("compass_pdf_selection").CSS)
+        self.assertIn("setTriggerValue",JS)
+        self.assertIn("marked",JS)
+        self.assertNotIn("parentElement.innerHTML",HTML)
+
+    def test_student_selection_same_quote_same_record_key(self):
+        same=selection_key(2,"기회비용은   포기한 대안")
+        self.assertEqual(same,selection_key(2,"기회비용은 포기한 대안"))
+        self.assertNotEqual(same,selection_key(3,"기회비용은 포기한 대안"))
 
 
 if __name__=="__main__":
