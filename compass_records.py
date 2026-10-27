@@ -5,6 +5,7 @@ import streamlit as st
 from compass_store import all_rows,marks,mark_status,material_rows,get_material
 from compass_journal import rows_for_diary
 from compass_independence import recent as recent_strategy_choices
+from compass_highlights import label as difficulty_label,set_label as set_difficulty_label
 
 COLORS={"어려움":("#ffd1d4","#873b44"),"흥미":("#cfe3ff","#305889"),
         "핵심":("#ffefab","#75591c"),"질문":("#c8f0d9","#246b49")}
@@ -12,6 +13,10 @@ COLORS={"어려움":("#ffd1d4","#873b44"),"흥미":("#cfe3ff","#305889"),
 
 def marked_section(db,owner,client,model):
     items=marks(db,owner)
+    focus_id=st.session_state.pop("focus_mark_id",None)
+    if focus_id and any(m["id"]==focus_id for m in items):
+        items.sort(key=lambda m:(m["id"]!=focus_id))
+        st.info("홈에서 선택한 어려움을 맨 위에 보여주고 있어요.")
     counts={kind:sum(x["kind"]==kind for x in items) for kind in COLORS}
     st.markdown("### 내가 표시한 학습 내용")
     st.caption("PDF에서 내가 직접 선택한 문단만 모았어요. 흥미 및 어려움은 AI가 판정한 값이 아니에요.")
@@ -35,6 +40,17 @@ def marked_section(db,owner,client,model):
             st.markdown("<div class='note'>"+html.escape(m["text"][:1200])+"</div>",unsafe_allow_html=True)
             if m["note"]:
                 st.caption("내가 남긴 메모: "+m["note"])
+            if m["kind"]=="어려움":
+                with st.expander("홈 키워드 이름 정하기 · 선택"):
+                    st.caption("원문에서 가져온 문구를 홈에서 내가 알아보기 쉬운 이름으로 바꿀 수 있어요.")
+                    with st.form("rename_mark_"+m["id"]):
+                        keyword=st.text_input("내 키워드",value=difficulty_label(m),max_chars=65)
+                        if st.form_submit_button("키워드 저장"):
+                            try:
+                                set_difficulty_label(db,owner,m["id"],keyword)
+                                st.success("홈의 어려움 카드에 표시할 이름을 저장했어요.")
+                            except ValueError as ex:
+                                st.warning(str(ex))
             row=st.columns([1.1,1.1,2])
             if row[0].button("확인했어요",key="mark_resolved_"+m["id"],help="목록에서 숨기지 않고 점검 완료로 이동"):
                 mark_status(db,owner,m["id"],"resolved")
@@ -69,7 +85,12 @@ def records_view(db,owner,client,model):
                 '<h2>내가 중요하게 표시한 것들</h2>'
                 '<p>어려웠던 내용, 흥미로운 문단, 직접 수행한 활동을 다시 찾아볼 수 있어요.</p></div>',
                 unsafe_allow_html=True)
+    mode=st.segmented_control("기록 보기",["하이라이트 모음","전체 기록"],
+                               default="하이라이트 모음",key="records_mode")
     marked_section(db,owner,client,model)
+    if mode=="하이라이트 모음":
+        st.caption("선택한 문장만 모아서 보는 화면이에요. 전체 기록을 누르면 학습활동과 학습일지도 확인할 수 있어요.")
+        return
     st.divider()
     with st.expander("내가 선택한 학습전략 돌아보기 · 선택",expanded=False):
         history=recent_strategy_choices(db,owner,limit=20)
