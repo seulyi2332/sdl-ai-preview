@@ -144,6 +144,8 @@ def home_view(db,owner,client,model):
             _jump("공부하기")
         if c3.button("오늘 돌아보기",use_container_width=True):
             _jump("학습일지")
+    from compass_home_keywords import render_home_difficulties
+    render_home_difficulties(db,owner)
     task_board(db,owner,compact=True)
     n=db.execute("SELECT COUNT(*) FROM compass_marks WHERE owner=? AND state='active'",(owner,)).fetchone()[0]
     if n:
