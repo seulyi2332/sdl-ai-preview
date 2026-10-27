@@ -1,6 +1,7 @@
 """Optional live OpenAI strategy recommendation. A fallback is never labeled AI."""
 import json
 from .strategies import recommend
+from .model_client import complete_json
 
 STRATEGY_SYSTEM = """대학생의 자기주도학습역량을 지원하는 학습전략 안내자다.
 교과목, 학습자료, 과제, 어려움에 맞춘 다양한 학습전략과 실제 수행 방법을 제공하라.
@@ -25,11 +26,7 @@ def suggest_strategies(ctx, client, model="gpt-4o-mini"):
         "prior_methods":ctx.prior_methods,
         "candidates":[{"id":s["id"],"name":s["name"],"benefit":s["benefit"],
                        "steps":s["steps"]} for s in candidates]}
-    response=client.chat.completions.create(
-        model=model,temperature=0.2,response_format={"type":"json_object"},
-        messages=[{"role":"system","content":STRATEGY_SYSTEM},
-                  {"role":"user","content":json.dumps(payload,ensure_ascii=False)}])
-    data=json.loads(response.choices[0].message.content or "{}")
+    data=complete_json(client,model,STRATEGY_SYSTEM,payload)
     allowed={s["id"]:s for s in candidates}
     results=[]
     for suggestion in data.get("strategies",[])[:3]:
