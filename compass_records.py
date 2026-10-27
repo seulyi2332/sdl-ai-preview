@@ -7,6 +7,7 @@ from compass_journal import rows_for_diary
 from compass_independence import recent as recent_strategy_choices
 from compass_highlights import label as difficulty_label,set_label as set_difficulty_label
 from compass_major_links import record_exploration
+from compass_selfcheck_links import records_section
 
 COLORS={"어려움":("#ffd1d4","#873b44"),"흥미":("#cfe3ff","#305889"),
         "핵심":("#ffefab","#75591c"),"질문":("#c8f0d9","#246b49")}
