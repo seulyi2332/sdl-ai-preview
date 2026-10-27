@@ -118,10 +118,10 @@ def home_view(db,owner,client,model):
     highlights=all_rows(db,"""SELECT kind,text,note FROM compass_marks
           WHERE owner=? AND state='active' AND kind IN ('흥미','어려움')
           ORDER BY created DESC LIMIT 2""",(owner,))
-    if diary or highlights:
-        if interest_for(db,owner):
+    if interest_for(db,owner):
         st.caption("🌿 내가 설정한 관심 분야: "+interest_for(db,owner))
-    st.markdown("### 내가 남긴 학습의 흔적")
+    if diary or highlights:
+        st.markdown("### 내가 남긴 학습의 흔적")
         left,right=st.columns(2,gap="medium")
         with left.container(border=True):
             st.markdown("**✍️ 최근 학습일지**")
