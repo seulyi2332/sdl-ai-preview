@@ -228,9 +228,13 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
                                       placeholder="설명, 회상, 관점 비교, 학습계획 등의 내용을 적어 보세요.")
                 work={"response":response}
                 attempt=bool(response.strip())
-            selfcheck=st.selectbox("내가 느낀 이해 정도 (선택)",[None,"아직 잘 모르겠어요",
-                                       "조금 이해했어요","내 말로 설명할 수 있어요"],
-                                   format_func=lambda x:x or "나중에 평가할래요")
+            selfcheck=st.radio(
+                "내가 느낀 이해 정도 (선택)",
+                ["나중에 평가할래요","아직 잘 모르겠어요",
+                 "조금 이해했어요","내 말로 설명할 수 있어요"],
+                index=0,key="study_practice_selfcheck",horizontal=False)
+            if selfcheck=="나중에 평가할래요":
+                selfcheck=None
             saved=st.form_submit_button("내 학습기록에 저장",type="primary")
         if saved:
             if attempt:
@@ -248,11 +252,16 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
                 st.success("내가 직접 수행한 내용을 저장했어요.")
             else:
                 st.warning("실제 수행한 내용을 먼저 적어 주세요.")
-        with st.expander("막혔을 때 도움과 예시 보기"):
-            for i,step in enumerate(chosen["steps"],1):
-                st.markdown(f"{i}. {step}")
-            if chosen.get("example"):
-                st.info(chosen["example"])
+        # A simple checkbox avoids the broken expander icon/overlapping title
+        # observed in mobile browsers, while keeping extra guidance optional.
+        show_help=st.checkbox("막혔을 때 도움과 예시 보기",
+                              key="study_show_steps_"+chosen["id"])
+        if show_help:
+            with st.container(border=True):
+                for i,step in enumerate(chosen["steps"],1):
+                    st.write(f"{i}. {step}")
+                if chosen.get("example"):
+                    st.info(chosen["example"])
     activity=st.session_state.get("study_last_work") or {}
     if activity.get("owner")==owner and activity.get("strategy")==chosen["id"]:
         with st.container(border=True):
@@ -261,10 +270,16 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
             last=db.execute("SELECT id FROM demo_practice WHERE owner=? AND id=?",
                             (owner,activity["id"])).fetchone()
             if last:
-                help_level=st.selectbox("어떤 도움을 받고 싶나요? (선택)",
-                     ["구체적으로 잘된 점과 보완점","정답을 바로 말하기보다 단서부터",
-                      "필요한 개념과 예시 자세히"],key="study_feedback_mode")
-                if st.button("내 답에 AI 피드백 받기",key="study_feedback_btn",type="primary"):
+                st.caption("아래에서 원하는 도움을 직접 골라 주세요. 모바일에서는 선택지를 한 번 눌러 선택할 수 있어요.")
+                help_level=st.radio(
+                    "어떤 도움을 받고 싶나요?",
+                    ["정답을 바로 말하기보다 단서부터",
+                     "구체적으로 잘된 점과 보완점",
+                     "필요한 개념과 예시 자세히"],
+                    key="study_feedback_mode",index=0,horizontal=False)
+                st.caption("지금 선택한 도움: "+help_level)
+                if st.button("선택한 수준으로 AI 피드백 받기",
+                             key="study_feedback_btn",type="primary"):
                     if not client:
                         st.warning("실제 AI 키가 연결되어 있지 않아요. 저장한 내 답은 그대로 남아 있어요.")
                     else:
