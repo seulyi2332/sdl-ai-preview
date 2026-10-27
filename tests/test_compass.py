@@ -111,8 +111,8 @@ class RenderTests(unittest.TestCase):
         self.assertFalse(app.exception,[x.message for x in app.exception])
         self.assertTrue(any(x.key=="study_feedback_mode" for x in app.radio),
             "After save, feedback radio missing. Widgets="+str([(x.key,x.label) for x in app.radio])+
-            " Messages="+str([x.message for x in app.success])+
-            " Warnings="+str([x.message for x in app.warning])+
+            " Messages="+str([str(x)[:200] for x in app.success])+
+            " Warnings="+str([str(x)[:200] for x in app.warning])+
             " Buttons="+str([(x.key,x.label) for x in app.button]))
         mode=app.radio(key="study_feedback_mode")
         self.assertEqual("정답을 바로 말하기보다 단서부터",mode.value)
