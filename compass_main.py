@@ -4,6 +4,7 @@ import json
 import streamlit as st
 from openai import OpenAI
 from compass_store import connect, migrate_tasks
+from compass_access import is_demo_access_code,study_id_label,STUDENT_CODES
 from compass_views import home_view, goal_view, study_view, diary_view, records_view
 
 MENU=("오늘","목표와 계획","공부하기","학습일지","내 기록")
@@ -68,7 +69,8 @@ def run():
     with st.sidebar:
         st.markdown("## 🧭 나의 학습나침반")
         st.caption("내가 목표를 정하고 공부하며 돌아보는 공간")
-        owner=st.text_input("접속 코드",value="DEMO01",max_chars=40)
+        owner=st.text_input("접속 코드",value="",placeholder="예: S01",max_chars=40,key="participant_access_code")
+        st.caption("학생은 안내받은 S01~S09 중 자기 코드만 입력하세요. S10~S12는 예비용입니다.")
         st.divider()
         st.caption("AI는 근거와 선택지를 제공해요. 목표, 수행, 점검, 조정은 내가 결정해요.")
         st.caption("이 시연 앱의 접속 코드는 보안 인증이 아니며, 저장 정보는 서버 재시작 시 없어질 수 있어요.")
@@ -77,10 +79,14 @@ def run():
         else:
             st.warning("AI API 키 없음 · 전략은 카탈로그로 안내")
     allowed=secret("PARTICIPANT_CODES")
-    configured={x.strip() for x in allowed.replace("\n",",").split(",") if x.strip()}
-    if not (owner.isalnum() and 5<=len(owner)<=40 and (owner.startswith("DEMO") or owner in configured)):
-        st.error("시연 코드는 DEMO로 시작해요. 별도 참여 코드는 관리자가 설정한 경우에만 사용할 수 있어요.")
+    if not owner.strip():
+        st.info("왼쪽의 '접속 코드'에 안내받은 S01~S09를 입력하면 시작할 수 있어요.")
+        st.caption("평가용 접속 코드는 본인 확인이나 비밀번호가 아니에요. 실명, 개인정보, 비공개 PDF는 입력하지 마세요.")
         st.stop()
+    if not is_demo_access_code(owner,allowed):
+        st.error("참여 코드를 확인해 주세요. S01~S12 또는 DEMO로 시작하는 시연 코드를 입력할 수 있어요.")
+        st.stop()
+    st.caption(study_id_label(owner)+" · 공개 시연 앱: 예시 자료만 입력하고 평가 응답은 별도 설문지로 제출해 주세요.")
     if st.session_state.get("_active_owner")!=owner:
         for k in list(st.session_state):
             if k not in ("_active_owner","compass_page","_compass_go"):
