@@ -84,7 +84,7 @@ class FeedbackTests(unittest.TestCase):
         self.assertNotIn("temperature",request)
         self.assertIn("저는 기회비용",request["input"][0]["content"])
         self.assertIn("기회비용은 포기한 대안",request["input"][0]["content"])
-        self.assertIn("자동",request["instructions"])
+        self.assertIn("사용자 요청 없이",request["instructions"])
 
 
 if __name__=="__main__":
