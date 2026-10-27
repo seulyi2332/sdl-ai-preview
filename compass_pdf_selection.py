@@ -137,6 +137,8 @@ export default function ({parentElement,data,setTriggerValue}) {
   let dragStart=null;
   let dragEnd=null;
   let lastPointerPage=null;
+  let dragStartPoint=null;
+  let dragEndPoint=null;
   const sameDocument=viewport.dataset.documentId===documentId;
   const previousScroll=sameDocument?viewport.scrollTop:null;
 
@@ -220,6 +222,8 @@ export default function ({parentElement,data,setTriggerValue}) {
     if(s) s.removeAllRanges();
     dragStart=null;
     dragEnd=null;
+    dragStartPoint=null;
+    dragEndPoint=null;
   }
   function closestPage(node) {
     const el=node?.nodeType===1?node:node?.parentElement;
@@ -287,6 +291,50 @@ export default function ({parentElement,data,setTriggerValue}) {
     return rects;
   }
 
+  function textFromPointerDrag() {
+    // Geometry fallback for browsers that paint selected text but do not
+    // expose a usable DOM Selection through Streamlit's shadow boundary.
+    if(!dragStartPoint || !dragEndPoint) return null;
+    const page=lastPointerPage;
+    if(!page || !viewport.contains(page)) return null;
+    const spans=Array.from(page.querySelectorAll(".pdf-text-span"));
+    const center=el=>{
+      const r=el.getBoundingClientRect();
+      return {x:(r.left+r.right)/2,y:(r.top+r.bottom)/2};
+    };
+    function nearest(pt) {
+      let result=null,score=Infinity;
+      for(let i=0;i<spans.length;i++) {
+        const rect=spans[i].getBoundingClientRect();
+        const dx=Math.max(rect.left-pt.x,0,pt.x-rect.right);
+        const dy=Math.max(rect.top-pt.y,0,pt.y-rect.bottom);
+        const val=dx*dx+dy*dy*8;
+        if(val<score){score=val;result=i;}
+      }
+      return result;
+    }
+    const a=nearest(dragStartPoint),b=nearest(dragEndPoint);
+    if(a===null||b===null)return null;
+    const first=Math.min(a,b),last=Math.max(a,b);
+    // Trim the endpoints to the pointer's approximate character position.
+    function offset(idx,pt) {
+      const rect=spans[idx].getBoundingClientRect();
+      const size=(spans[idx].textContent||"").length;
+      if(!size || !rect.width)return 0;
+      return Math.max(0,Math.min(size,Math.round((pt.x-rect.left)/rect.width*size)));
+    }
+    let begin=first===a?offset(a,dragStartPoint):offset(b,dragEndPoint);
+    let end=last===b?offset(b,dragEndPoint):offset(a,dragStartPoint);
+    if(first===last && end<begin) [begin,end]=[end,begin];
+    const parts=[];
+    for(let i=first;i<=last;i++){
+      const str=spans[i].textContent||"";
+      parts.push(str.slice(i===first?begin:0,i===last?end:str.length));
+    }
+    const text=parts.join(" ").trim().replace(/\\s+/g," ");
+    if(text.length<2)return null;
+    return {text,page};
+  }
   function showBar() {
     const selection=currentSelection();
     let range=selection?.rangeCount?selection.getRangeAt(0):null;
@@ -299,6 +347,11 @@ export default function ({parentElement,data,setTriggerValue}) {
         range=dragged;
         text=dragged.toString().trim().replace(/\s+/g," ");
       }
+    }
+    let pointerFallback=null;
+    if(!text || !range || !viewport.contains(range.startContainer)) {
+      pointerFallback=textFromPointerDrag();
+      if(pointerFallback) text=pointerFallback.text;
     }
     if(text.length<2 || text.length>1600) {
       if(status)status.textContent="선택한 문장을 읽지 못했어요. 다시 드래그하거나 아래 문단 목록을 이용해 주세요.";
@@ -315,13 +368,14 @@ export default function ({parentElement,data,setTriggerValue}) {
                r.right>box.left && r.left<box.right;
       })||null;
     }
+    if(!page && pointerFallback) page=pointerFallback.page;
     if(!page && lastPointerPage && viewport.contains(lastPointerPage)) page=lastPointerPage;
     if(!page||!viewport.contains(page)) {
       if(status)status.textContent="선택한 쪽을 확인하지 못했어요. 한 쪽 안에서 다시 드래그해 주세요.";
       return;
     }
     const last=range?closestPage(range.endContainer):null;
-    if(last && last!==page)return; // Cross-page selections are not saved.
+    if(last && last!==page && !pointerFallback)return; // Cross-page selections are not saved.
     let rects=range?selectionRects(range,page):[];
     if(!rects.length && r && r.width>1 && r.height>1) {
       const bounds=page.getBoundingClientRect();
@@ -347,10 +401,13 @@ export default function ({parentElement,data,setTriggerValue}) {
   const onPointerDown=event=>{
     dragStart=caretAt(event);
     dragEnd=null;
+    dragStartPoint={x:event.clientX,y:event.clientY};
+    dragEndPoint=null;
     lastPointerPage=pointerPage(event);
   };
   const onMouseUp=event=>{
     dragEnd=caretAt(event);
+    dragEndPoint={x:event.clientX,y:event.clientY};
     lastPointerPage=pointerPage(event)||lastPointerPage;
     setTimeout(showBar,45);
   };
