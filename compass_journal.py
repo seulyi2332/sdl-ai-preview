@@ -7,6 +7,7 @@ from sdl_upgrade.model_client import safe_error_message
 from compass_store import all_rows,ident,now
 from compass_progress import criterion_for,time_summaries,adjustments
 from compass_independence import recent as recent_strategy_choices
+from compass_major_links import reflection_exploration
 
 CATEGORY={
   "studied":"오늘 배운 것","well":"잘된 점","difficult":"어려웠던 점",
@@ -81,6 +82,7 @@ def journal_form(db,owner,client,model):
                 label="내가 직접 고른 방법" if m["choice_source"]=="student" else "AI 제안을 보고 내가 고른 방법"
                 st.caption(label+" · "+m["name"]+" · "+(m["course"] or "교과목 미설정"))
         st.caption("이 기록은 참고자료예요. 학습일지에 무엇을 쓸지는 내가 결정해요.")
+    reflection_exploration(db,owner)
     text=st.text_area("오늘의 공부 이야기",key="diary_story",height=210,
       placeholder="오늘 무엇을 공부했나요?\n어떤 부분이 도움이 됐고 무엇이 어려웠나요?\n흥미로웠던 주제나 다음에 해 보고 싶은 공부가 있다면 편하게 적어 보세요.")
     diary_controls=st.columns([1,1.6])
