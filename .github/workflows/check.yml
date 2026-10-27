@@ -28,6 +28,9 @@ jobs:
           test = AppTest.from_file("ai_preview_app.py",default_timeout=30).run()
           problems = [getattr(e, "message", str(e)) for e in test.exception]
           assert not problems, problems
+          test.text_input(key="participant_access_code").set_value("S01").run()
+          problems = [getattr(e, "message", str(e)) for e in test.exception]
+          assert not problems, problems
           pages = [x for x in test.radio if x.key == "compass_page"]
           assert pages and list(pages[0].options) == ["오늘","목표와 계획","공부하기","학습일지","내 기록"]
           print("Compass home and five navigation choices render successfully")
