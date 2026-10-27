@@ -25,7 +25,7 @@ def mock_client(data):
 class TestStrategy(unittest.TestCase):
     def test_expanded_catalog(self):
         self.assertGreaterEqual(len(CATALOG),60)
-        self.assertEqual(24,len({x["id"] for x in CATALOG}))
+        self.assertEqual(len(CATALOG),len({x["id"] for x in CATALOG}))
 
     def test_math_strategy(self):
         results=recommend(StudyContext(course="통계학",difficulty="공식을 언제 쓰는지 헷갈려요"))
