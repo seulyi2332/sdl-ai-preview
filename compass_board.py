@@ -209,7 +209,7 @@ def home_view(db,owner,client,model):
 def goal_view(db,owner,client,model):
     st.markdown("### 목표와 계획")
     st.caption("큰 방향과 이번에 해 볼 목표를 직접 정해요. 할 일 완료와 목표 도달 자기평가는 구분해요.")
-    with st.expander("🌿 교과목 학습과 나의 관심 전공 연결하기 · 선택",expanded=False):
+    with st.expander("🌿 전공 및 진로 탐색 · 교과목 학습과 연결",expanded=True):
         current=interest_for(db,owner)
         st.caption("전공 추천이나 적합도 진단이 아니에요. 내가 선택한 관심 분야만 AI 설명의 맥락으로 활용해요.")
         with st.form("interest_form"):
