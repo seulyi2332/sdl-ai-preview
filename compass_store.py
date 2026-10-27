@@ -56,7 +56,22 @@ def connect():
     con.execute("""CREATE TABLE IF NOT EXISTS compass_selfcheck (
         id TEXT PRIMARY KEY,owner TEXT NOT NULL,goal_id TEXT NOT NULL,
         evaluation TEXT NOT NULL,memo TEXT NOT NULL,created TEXT NOT NULL)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS compass_interests (
+       owner TEXT PRIMARY KEY, majors TEXT NOT NULL DEFAULT '',
+       updated TEXT NOT NULL)""")
     return con
+
+
+def interest_for(db,owner):
+    row=db.execute("SELECT majors FROM compass_interests WHERE owner=?",(owner,)).fetchone()
+    return row["majors"] if row else ""
+
+
+def save_interest(db,owner,majors):
+    db.execute("""INSERT INTO compass_interests(owner,majors,updated)
+        VALUES(?,?,?) ON CONFLICT(owner) DO UPDATE
+        SET majors=excluded.majors,updated=excluded.updated""",
+        (owner,majors.strip()[:300],now()))
 
 
 def all_rows(db,sql,args=()):
