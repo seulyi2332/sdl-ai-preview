@@ -7,7 +7,7 @@ from types import SimpleNamespace
 TMP=tempfile.TemporaryDirectory()
 os.environ["SDL_AI_PREVIEW_DB"]=os.path.join(TMP.name,"progress.db")
 
-from compass_store import connect,add_task,task_rows,add_material
+from compass_store import connect,add_task,task_rows,add_material,put_mark
 from compass_progress import (save_criterion,criterion_for,save_time,
                               latest_time,time_summaries,revise_goal,adjustments)
 from compass_feedback import make_feedback
@@ -110,6 +110,46 @@ class ScrollablePdfTests(unittest.TestCase):
         self.assertIn("setTriggerValue",JS)
         self.assertIn("marked",JS)
         self.assertNotIn("parentElement.innerHTML",HTML)
+
+    def test_pdf_floating_color_palette_and_overlay(self):
+        from compass_pdf_selection import CSS
+        self.assertIn("어떤 내용으로 표시할까요?",HTML)
+        self.assertIn("const palette=",JS)
+        self.assertIn('"어려움":{fill:"#ff9fa5"',JS)
+        self.assertIn('"흥미":{fill:"#9ac6ff"',JS)
+        self.assertIn('"핵심":{fill:"#ffe478"',JS)
+        self.assertIn('"질문":{fill:"#9be4bc"',JS)
+        self.assertIn("toolbar.style.top=clamp",JS)
+        self.assertIn("selectionRects(range,page)",JS)
+        self.assertIn("drawMarks()",JS)
+        self.assertIn('setTriggerValue("marked"',JS)
+        self.assertIn("position:absolute",CSS)
+        self.assertIn("document.addEventListener",JS)
+
+    def test_saved_pdf_highlights_preserve_selection_rectangles(self):
+        db=connect()
+        material_id=add_material(db,"S07","public-example.pdf",b"%PDF",[],1)
+        rects=[{"x":11.3,"y":22.5,"w":37.2,"h":1.8}]
+        put_mark(db,"S07",material_id,"drag-1-example","흥미",
+                 "나의 학습 흥미 문장",geometry=rects)
+        row=db.execute("""SELECT kind,text,geometry FROM compass_marks
+             WHERE owner=? AND material_id=?""",("S07",material_id)).fetchone()
+        self.assertEqual("흥미",row["kind"])
+        self.assertEqual(rects,__import__("json").loads(row["geometry"]))
+        put_mark(db,"S07",material_id,"drag-1-example","흥미",
+                 "나의 학습 흥미 문장",geometry=rects)
+        count=db.execute("""SELECT COUNT(*) FROM compass_marks
+             WHERE owner=? AND material_id=?""",("S07",material_id)).fetchone()[0]
+        self.assertEqual(1,count)
+        put_mark(db,"S07",material_id,"p1-0","어려움","기존 문단 표시")
+        row2=db.execute("""SELECT geometry FROM compass_marks
+             WHERE owner=? AND paragraph_id='p1-0'""",("S07",)).fetchone()
+        self.assertEqual("",row2["geometry"])
+        self.assertEqual(0,db.execute("""SELECT COUNT(*) FROM compass_marks
+             WHERE owner='S08' AND material_id=?""",(material_id,)).fetchone()[0])
+        with self.assertRaises(ValueError):
+            put_mark(db,"S08",material_id,"drag-1-example","핵심","다른 학생 자료",geometry=rects)
+        db.close()
 
     def test_student_selection_same_quote_same_record_key(self):
         same=selection_key(2,"기회비용은   포기한 대안")
