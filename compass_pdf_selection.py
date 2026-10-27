@@ -58,6 +58,8 @@ HTML="""<div class="pdf-selection-root">
     <div class="pdf-mark-actions"></div>
     <button type="button" class="pdf-cancel">취소</button>
   </div>
+  <div class="pdf-selection-fallback"><span>글자를 드래그했는데 메뉴가 안 뜨나요?</span>
+    <button type="button" class="pdf-retry-selection">선택한 글 표시하기</button></div>
   <div class="pdf-color-legend">
     <span style="background:#ffd1d4">어려움</span>
     <span style="background:#cfe3ff">흥미</span>
@@ -90,6 +92,11 @@ CSS="""
  border:1px solid #d5e0d9;border-radius:13px;background:#fff;
  box-shadow:0 10px 28px rgba(21,48,43,.27);}
 .pdf-mark-bar[hidden]{display:none!important;}
+.pdf-selection-fallback{display:flex;align-items:center;justify-content:space-between;gap:12px;
+ padding:8px 10px;background:#f6faf6;border:1px solid #cddad4;border-top:0;font-size:12px;
+ color:#4c685f;flex-wrap:wrap;}
+.pdf-retry-selection{background:#155d56;color:#fff;border-radius:10px;border:0;
+ font-size:12px;padding:8px 12px;min-height:35px;cursor:pointer;font-weight:750;}
 .pdf-mark-bar-title{font-size:12px;color:#566e66;font-weight:700;}
 .pdf-selected-quote{font-size:12px;color:#405852;line-height:1.5;display:-webkit-box;
  -webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
@@ -113,6 +120,7 @@ export default function ({parentElement,data,setTriggerValue}) {
   const quote=root?.querySelector(".pdf-selected-quote");
   const actions=root?.querySelector(".pdf-mark-actions");
   const cancel=root?.querySelector(".pdf-cancel");
+  const retry=root?.querySelector(".pdf-retry-selection");
   if(!root || !viewport || !toolbar || !data) return;
 
   const palette={
@@ -162,10 +170,22 @@ export default function ({parentElement,data,setTriggerValue}) {
   if(previousScroll!==null) viewport.scrollTop=previousScroll;
   else if(Number.isFinite(data.scroll) && data.scroll>=0) viewport.scrollTop=data.scroll;
 
+  function currentSelection() {
+    // Streamlit components can render within a shadow root. Chrome and
+    // other browsers may expose the actual text range on the shadow root
+    // rather than on window.getSelection().
+    const tree=root.getRootNode();
+    let local=null;
+    try {
+      if(tree && typeof tree.getSelection==="function") local=tree.getSelection();
+    } catch(e) {}
+    return (local && !local.isCollapsed && local.toString().trim())?
+            local:window.getSelection();
+  }
   function clearSelection() {
     selected=null;
     toolbar.hidden=true;
-    const s=window.getSelection();
+    const s=currentSelection();
     if(s) s.removeAllRanges();
   }
   function closestPage(node) {
@@ -235,29 +255,47 @@ export default function ({parentElement,data,setTriggerValue}) {
   }
 
   function showBar() {
-    const selection=window.getSelection();
-    if(!selection || selection.isCollapsed || !selection.rangeCount)return;
+    const selection=currentSelection();
+    if(!selection || selection.isCollapsed)return;
     const text=selection.toString().trim().replace(/\s+/g," ");
     if(text.length<2 || text.length>1600)return;
-    const range=selection.getRangeAt(0);
-    const page=closestPage(range.startContainer);
-    // Only accept PDF text layer selections. Reject browser text outside PDF.
-    const first=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement;
-    if(!page||!viewport.contains(page)||!first?.closest?.(".pdf-text-layer"))return;
-    const last=closestPage(range.endContainer);
-    if(last!==page)return; // Mark one page at a time for accurate storage.
-    const rects=selectionRects(range,page);
-    if(!rects.length)return;
+    let range=null;
+    if(selection.rangeCount) range=selection.getRangeAt(0);
+    // A text range selected inside Streamlit's component shadow root
+    // can be retargeted to the host. Recover the page by its viewport box.
+    const r=range?range.getBoundingClientRect():null;
+    let page=range?closestPage(range.startContainer):null;
+    if(!page && r) {
+      page=Array.from(viewport.querySelectorAll(".pdf-page")).find(el=>{
+        const box=el.getBoundingClientRect();
+        return r.top<box.bottom && r.bottom>box.top &&
+               r.right>box.left && r.left<box.right;
+      })||null;
+    }
+    if(!page||!viewport.contains(page))return;
+    const last=range?closestPage(range.endContainer):null;
+    if(last && last!==page)return; // Cross-page selections are not saved.
+    let rects=range?selectionRects(range,page):[];
+    if(!rects.length && r && r.width>1 && r.height>1) {
+      const bounds=page.getBoundingClientRect();
+      const x=clamp(r.left-bounds.left,0,bounds.width);
+      const y=clamp(r.top-bounds.top,0,bounds.height);
+      rects=[{x:+(x/bounds.width*100).toFixed(3),y:+(y/bounds.height*100).toFixed(3),
+        w:+(clamp(r.right-bounds.left,0,bounds.width)-x)/bounds.width*100,
+        h:+(clamp(r.bottom-bounds.top,0,bounds.height)-y)/bounds.height*100}];
+    }
     selected={text,page:Number(page.dataset.page),doc:documentId,rects};
     quote.textContent="선택한 글: "+text.slice(0,160)+(text.length>160?"…":"");
     toolbar.hidden=false;
     // Position immediately beside the selection, as in the former Claude PDF app.
-    const r=range.getBoundingClientRect(),base=root.getBoundingClientRect();
-    const above=r.top-base.top-toolbar.offsetHeight-9;
-    const below=r.bottom-base.top+9;
+    const base=root.getBoundingClientRect();
+    const viewportBox=viewport.getBoundingClientRect();
+    const tip=r||viewportBox;
+    const above=tip.top-base.top-toolbar.offsetHeight-9;
+    const below=tip.bottom-base.top+9;
     const top=(above>=4)?above:below;
     toolbar.style.top=clamp(top,4,Math.max(4,root.clientHeight-toolbar.offsetHeight-4))+"px";
-    toolbar.style.left=clamp(r.left-base.left,5,Math.max(5,root.clientWidth-toolbar.offsetWidth-5))+"px";
+    toolbar.style.left=clamp(tip.left-base.left,5,Math.max(5,root.clientWidth-toolbar.offsetWidth-5))+"px";
   }
   let selectionTimer=null;
   const onMouseUp=()=>setTimeout(showBar,25);
@@ -267,8 +305,15 @@ export default function ({parentElement,data,setTriggerValue}) {
     selectionTimer=setTimeout(showBar,450);
   };
   viewport.addEventListener("mouseup",onMouseUp);
+  viewport.addEventListener("pointerup",onMouseUp);
   viewport.addEventListener("touchend",onTouchEnd);
   document.addEventListener("selectionchange",onSelectionChange);
+  const rootNode=root.getRootNode();
+  if(rootNode!==document) rootNode.addEventListener("selectionchange",onSelectionChange);
+  if(retry) {
+    retry.onmousedown=e=>e.preventDefault();
+    retry.onclick=showBar;
+  }
   toolbar.addEventListener("mousedown",e=>e.preventDefault());
   actions.replaceChildren();
 
@@ -301,8 +346,11 @@ export default function ({parentElement,data,setTriggerValue}) {
   viewport.addEventListener("scroll",onScroll,{passive:true});
   return ()=>{
     viewport.removeEventListener("mouseup",onMouseUp);
+    viewport.removeEventListener("pointerup",onMouseUp);
     viewport.removeEventListener("touchend",onTouchEnd);
     document.removeEventListener("selectionchange",onSelectionChange);
+    if(rootNode!==document)rootNode.removeEventListener("selectionchange",onSelectionChange);
+    if(retry)retry.onclick=null;
     if(selectionTimer!==null)clearTimeout(selectionTimer);
     viewport.removeEventListener("scroll",onScroll);
   };
