@@ -7,6 +7,7 @@ from sdl_upgrade.model_client import safe_error_message
 from compass_store import all_rows,ident,now,interest_for
 from compass_progress import criterion_for,time_summaries,adjustments
 from compass_independence import recent as recent_strategy_choices
+from compass_diary_dialogue import activate as activate_diary_conversation,view as diary_conversation_view
 
 CATEGORY={
   "studied":"오늘 배운 것","well":"잘된 점","difficult":"어려웠던 점",
@@ -109,12 +110,21 @@ def journal_form(db,owner,client,model):
                  WHERE owner=? AND original=? AND briefing='' ORDER BY created DESC LIMIT 1""",
                  (owner,text.strip())).fetchone()
             if existing:
-                st.info("이미 같은 내용의 일기를 저장했어요. 지난 학습일지에서 확인할 수 있어요.")
+                diary_id=existing["id"]
+                st.info("이미 같은 내용의 일기를 저장했어요. 이 일기에 이어 AI와 대화할 수 있어요.")
             else:
+                diary_id=ident()
                 db.execute("""INSERT INTO demo_diaries
                      (id,owner,original,briefing,analysis,created) VALUES(?,?,?,?,?,?)""",
-                     (ident(),owner,text.strip(),"","{}",now()))
-                st.success("AI 브리핑 없이 내가 쓴 일기를 그대로 저장했어요.")
+                     (diary_id,owner,text.strip(),"","{}",now()))
+                st.success("내가 쓴 학습일기를 저장했어요.")
+            st.session_state["diary_conversation_id"]=diary_id
+            if client:
+                try:
+                    with st.spinner("오늘의 기록과 이전 학습경험을 참고해 질문하는 중이에요"):
+                        activate_diary_conversation(db,owner,diary_id,client,model)
+                except Exception as exc:
+                    st.warning("일기는 저장되었지만 AI의 첫 질문을 생성하지 못했어요: "+safe_error_message(exc))
         else:
             st.warning("일기에 오늘의 이야기를 먼저 작성해 주세요.")
     if diary_controls[1].button("AI에게 오늘의 브리핑 부탁하기",key="diary_analyze",type="primary"):
@@ -138,10 +148,12 @@ def journal_form(db,owner,client,model):
         st.caption("일기 원문은 그대로 남아 있어요. API 키를 다른 사람에게 보내지 마세요.")
     draft=st.session_state.get("diary_draft")
     if not draft:
+        diary_conversation_view(db,owner,client,model)
         saved_journal(db,owner)
         return
     if draft.get("original_diary") != text:
         st.info("일기 내용을 수정했어요. 다시 브리핑을 만들면 새 내용을 반영할 수 있어요.")
+        diary_conversation_view(db,owner,client,model)
         saved_journal(db,owner)
         return
     st.markdown("### 내가 말한 오늘의 학습")
@@ -168,6 +180,13 @@ def journal_form(db,owner,client,model):
                 (draft["id"],owner,text,briefing,
                  json.dumps(draft.get("facts") or {},ensure_ascii=False),now()))
             st.success("내가 확인한 학습일지와 브리핑을 저장했어요.")
+            st.session_state["diary_conversation_id"]=draft["id"]
+            if client:
+                try:
+                    with st.spinner("기록을 바탕으로 이어서 질문하는 중이에요"):
+                        activate_diary_conversation(db,owner,draft["id"],client,model)
+                except Exception as exc:
+                    st.warning("일기는 저장되었지만 AI의 질문 생성에 문제가 있어요: "+safe_error_message(exc))
         b.caption("AI는 학생의 자기평가를 대신하지 않아요.")
     if draft.get("questions"):
         with st.expander("더 돌아보고 싶은 질문 · 선택"):
@@ -188,6 +207,7 @@ def journal_form(db,owner,client,model):
                     db.execute("INSERT OR IGNORE INTO demo_goals VALUES(?,?,?,?,?,?,?)",
                                (f"{draft['id']}:goal:{i}",owner,proposed.strip(),"","","active",now()))
                     st.success("내가 선택한 목표를 추가했어요. '목표와 계획'에서 확인하고 할 일을 연결할 수 있어요.")
+    diary_conversation_view(db,owner,client,model)
     saved_journal(db,owner)
 
 
@@ -203,6 +223,9 @@ def saved_journal(db,owner):
                 if r["briefing"]:
                     st.markdown("**AI 브리핑 · 내가 확인한 내용**")
                     st.write(r["briefing"])
+                if st.button("이 일기의 AI 대화 이어가기",key="diary_resume_chat_"+r["id"]):
+                    st.session_state["diary_conversation_id"]=r["id"]
+                    st.rerun()
                 if st.button("숨기기",key="diary_hide_"+r["id"]):
                     set_hidden(db,owner,r["id"],True)
                     st.rerun()
