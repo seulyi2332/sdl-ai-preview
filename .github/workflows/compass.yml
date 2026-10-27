@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - dev/compass-redesign-20261027
+      - dev/evaluation-codes-20261027
   workflow_dispatch:
 jobs:
   compass:
