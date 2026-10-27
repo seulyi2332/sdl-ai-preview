@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from sdl_upgrade.strategies import StudyContext, CATALOG, recommend
 from sdl_upgrade.ai import suggest_strategies
-from sdl_upgrade.journal import validate_draft, analyze_diary, CATEGORIES
+from sdl_upgrade.journal import validate_draft, analyze_diary, ask_diary_followup, CATEGORIES
 from sdl_upgrade.model_client import safe_error_message
 
 
@@ -83,6 +83,27 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(1,len(result["goal_candidates"]))
         self.assertEqual("ai_draft_unconfirmed",result["goal_candidates"][0]["status"])
         self.assertFalse(result["approved"])
+
+    def test_single_diary_question_uses_student_diary_and_optional_major(self):
+        diary="심리학 시간에 기억의 원리를 배웠는데 더 궁금해졌어요."
+        client,stub=mock_client({"question":"기억에 관한 이번 수업에서 심리학 전공을 더 알아보고 싶어진 부분이 있었나요?"})
+        question=ask_diary_followup(diary,client,interest="심리학")
+        self.assertIn("심리학 전공",question)
+        payload=stub.calls[0]["input"][0]["content"]
+        self.assertIn(diary,payload)
+        self.assertIn("심리학",payload)
+        self.assertEqual("gpt-4o-mini",stub.calls[0]["model"])
+
+    def test_diary_question_does_not_require_major(self):
+        client,stub=mock_client({"question":"오늘 공부한 것 가운데 다음에 더 알아보고 싶은 내용이 있나요?"})
+        question=ask_diary_followup("오늘 통계를 공부했어요.",client)
+        self.assertIn("더 알아보고 싶은",question)
+        self.assertIn("null",stub.calls[0]["input"][0]["content"])
+
+    def test_empty_diary_question_is_rejected(self):
+        client,_=mock_client({"question":"무엇을 배웠나요?"})
+        with self.assertRaises(ValueError):
+            ask_diary_followup(" ",client)
 
     def test_empty_diary_rejected(self):
         client,_=mock_client({})
