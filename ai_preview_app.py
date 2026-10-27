@@ -13,6 +13,7 @@ from openai import OpenAI
 from sdl_upgrade.strategies import CATALOG, StudyContext, recommend
 from sdl_upgrade.ai import suggest_strategies
 from sdl_upgrade.journal import analyze_diary
+from sdl_upgrade.model_client import safe_error_message
 
 st.set_page_config(page_title="나의 학습 나침반 · 기능 시연", page_icon="🧭", layout="wide")
 st.markdown("""<style>
@@ -82,6 +83,7 @@ with st.sidebar:
     st.caption("실제 학생 자료를 입력하지 마세요. 연구 평가용 앱과 데이터가 연결되지 않습니다.")
     if client:
         st.success("OpenAI 키 설정됨 · 실제 응답은 요청 후 확인")
+        st.caption("설정된 AI 모델: " + model)
     else:
         st.warning("OpenAI 키 없음 · 전략은 카탈로그 추천, AI 일지 분석은 사용할 수 없음")
 
@@ -177,7 +179,7 @@ with view_study:
                     st.session_state["strategy_cards"]=suggest_strategies(context,client,model)
                 st.session_state["strategy_source"]="실제 OpenAI가 구성한 학습전략"
             except Exception as ex:
-                st.warning("AI 호출 실패. 카탈로그 기반 대안을 보여줘요. 실제 AI 응답이 아닙니다. ("+type(ex).__name__+")")
+                st.warning("AI 호출 실패. 카탈로그 기반 대안을 보여줘요. 실제 AI 응답이 아닙니다. ("+safe_error_message(ex)+")")
                 st.session_state["strategy_cards"]=recommend(context)
                 st.session_state["strategy_source"]="학습전략 카탈로그 기반 대안"
         else:
@@ -267,7 +269,8 @@ with view_diary:
                 st.session_state["diary_analysis"]=data
                 st.session_state["diary_analysis_id"]=str(uuid.uuid4())
             except Exception as ex:
-                st.error("AI 브리핑 생성에 실패했어요. ("+type(ex).__name__+")")
+                st.error("AI 브리핑 생성에 실패했어요. ("+safe_error_message(ex)+")")
+                st.caption("학습일지 원문은 입력칸에 남아 있어요. 오류가 반복되면 표시된 HTTP 및 code 정보만 알려 주세요. API 키는 공유하지 마세요.")
     result=st.session_state.get("diary_analysis")
     if result and result["original_diary"]==diary:
         st.divider()
