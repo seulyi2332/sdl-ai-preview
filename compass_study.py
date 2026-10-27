@@ -77,22 +77,32 @@ def pdf_study(db,owner):
             put_mark(db,owner,chosen,selected,kind,paragraph["text"],note)
             st.success(f"'{kind}'로 표시했어요. 내 기록에서 분류별로 다시 볼 수 있어요.")
         if st.button("이 문단을 AI와 공부하기",key="study_to_chat"):
-            st.session_state["study_chat_question"]="이 문단이 이해가 안 돼요. 핵심을 쉽게 설명하고 구체적인 예시를 들어 주세요."
             st.session_state["study_chat_excerpt"]=paragraph["text"]
-            st.info("아래 AI 대화에서 이 문단을 참고해 설명을 요청할 수 있어요.")
+            if kind=="어려움":
+                st.session_state["study_difficulty"]="PDF에서 선택한 이 문단을 이해하고 싶어요: "+paragraph["text"][:320]
+                st.session_state["study_chat_question"]="이 문단이 어려워요. 핵심을 쉽게 설명하고 구체적인 예시를 들어 주세요."
+            elif kind=="흥미":
+                st.session_state["study_chat_question"]="이 문단이 흥미로워요. 실제 적용 사례와 관심 전공에서의 연결을 설명해 주세요."
+            else:
+                st.session_state["study_chat_question"]="제가 선택한 문단을 내 말로 설명할 수 있게 사례를 보여 주세요."
+            st.success("선택한 문단을 아래 공부 방법과 AI 대화에 연결했어요.")
         return paragraph["text"]
 
 
 def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
     st.markdown("### 내 상황에 맞는 공부 방법")
-    st.caption("24가지 방법을 전부 고르는 대신, 교과목 및 어려움에 맞는 방법 2~3개와 실행 절차를 보여줘요.")
+    st.caption("24가지 방법을 모두 보여주지 않고, 교과목 및 어려움에 맞는 방법 2~3개를 제안해요.")
+    if st.session_state.get("study_chat_excerpt"):
+        with st.expander("📌 내가 선택한 PDF 학습내용 · 참고",expanded=False):
+            st.write(st.session_state["study_chat_excerpt"][:1200])
     difficulty=st.text_area("지금 공부하면서 막히는 점",key="study_difficulty",height=86,
                              placeholder="예: 심리학 이론이 비슷해서 구분하기 어려워요.")
     task=st.text_input("어떤 활동을 해 보고 싶나요? (선택)",key="study_task",
                         placeholder="예: 개념 차이 비교, 예제 풀이, 암기 후 점검")
+    chosen_excerpt=st.session_state.get("study_chat_excerpt") or excerpt
     ctx=StudyContext(course=course,topic=topic,difficulty=difficulty,
-                     task=task,material_excerpt=excerpt[:1800])
-    snapshot=(owner,course,topic,difficulty,task,excerpt[:500])
+                     task=task,material_excerpt=chosen_excerpt[:1800])
+    snapshot=(owner,course,topic,difficulty,task,chosen_excerpt[:500])
     if st.session_state.get("study_strategy_ctx")!=snapshot:
         st.session_state["study_strategy_ctx"]=snapshot
         st.session_state.pop("study_strategies",None)
@@ -219,7 +229,7 @@ def study_view(db,owner,client,model):
                         placeholder="예: 심리학개론")
     topic=b.text_input("오늘 공부할 주제",key="study_topic",
                        placeholder="예: 기억과 학습")
-    with st.container(border=True):
+    with st.expander("📚 내 학습자료 읽기와 PDF 문단 표시",expanded=False):
         excerpt=pdf_study(db,owner)
     st.divider()
     strategy_and_practice(db,owner,client,model,course,topic,excerpt)
