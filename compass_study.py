@@ -12,6 +12,7 @@ from sdl_upgrade.ai import suggest_strategies
 from sdl_upgrade.model_client import safe_error_message
 from compass_chat import answer
 from compass_feedback import make_feedback
+from compass_strategy_cards import open_library
 
 KIND_TIP={"어려움":"이해가 어렵거나 다시 보고 싶은 문장",
           "흥미":"관심이 가거나 더 알고 싶은 내용",
@@ -136,7 +137,7 @@ def pdf_study(db,owner):
 
 def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
     st.markdown("### 내 상황에 맞는 공부 방법")
-    st.caption("24가지 방법을 모두 보여주지 않고, 교과목 및 어려움에 맞는 방법 2~3개를 제안해요.")
+    st.caption(f"{len(CATALOG)}가지 학습전략 중 내가 직접 고르거나, 필요할 때 AI가 상황에 맞는 2~3가지를 제안해요.")
     if st.session_state.get("study_chat_excerpt"):
         with st.expander("📌 내가 선택한 PDF 학습내용 · 참고",expanded=False):
             st.write(st.session_state["study_chat_excerpt"][:1200])
@@ -145,25 +146,6 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
     task=st.text_input("어떤 활동을 해 보고 싶나요? (선택)",key="study_task",
                         placeholder="예: 개념 차이 비교, 예제 풀이, 암기 후 점검")
     chosen_excerpt=st.session_state.get("study_chat_excerpt") or excerpt
-    # The learner may decide on a strategy before consulting AI.
-    with st.expander("🌱 이번에는 내가 먼저 공부 방법 골라보기 · 선택",expanded=False):
-        st.caption("AI의 추천을 보지 않고도 내가 아는 공부 방법을 직접 선택해 볼 수 있어요. 필요하면 아래에서 언제든 AI 도움을 받아요.")
-        past=recent_strategy_choices(db,owner,course,limit=3)
-        if past:
-            st.caption("내가 이전에 선택한 방법: "+", ".join(dict.fromkeys(x["name"] for x in past)))
-        ids=[x["id"] for x in CATALOG]
-        names={x["id"]:x["name"] for x in CATALOG}
-        selected=st.selectbox("지금 내 상황에 맞는 방법을 직접 고르기",ids,
-                              format_func=lambda k:names[k],index=None,placeholder="방법 이름을 검색해 골라주세요",
-                              key="study_self_strategy")
-        reason=st.text_input("이 방법을 고른 이유 (선택)",key="study_self_reason",
-                             placeholder="예: 개념 차이가 헷갈려서 비교표를 작성하고 싶어요.")
-        if st.button("이 방법으로 내가 직접 해보기",key="study_self_start",disabled=not selected):
-            st.session_state["study_strategy_selected"]=selected
-            st.session_state["study_strategy_self_card"]=student_chosen_card(selected)
-            st.session_state["study_strategy_info"]="내가 직접 선택한 학습전략이에요. 필요하면 단계별 예시를 펼쳐 볼 수 있어요."
-            log_strategy_choice(db,owner,course,topic,selected,"student")
-            st.rerun()
     ctx=StudyContext(course=course,topic=topic,difficulty=difficulty,
                      task=task,material_excerpt=chosen_excerpt[:1800])
     snapshot=(owner,course,topic,difficulty,task,chosen_excerpt[:500])
@@ -173,6 +155,8 @@ def strategy_and_practice(db,owner,client,model,course,topic,excerpt):
         # A changed course, difficulty or topic starts a new strategy choice.
         st.session_state.pop("study_strategy_selected",None)
         st.session_state.pop("study_strategy_self_card",None)
+    open_library(db,owner,course,topic)
+    st.caption("필요하면 아래 버튼으로 현재 교과목과 어려움에 맞는 AI 학습전략을 받아 볼 수 있어요.")
     if st.button("내 공부 방법 추천받기",type="primary",key="study_recommend"):
         st.session_state.pop("study_strategy_self_card",None)
         if client:
