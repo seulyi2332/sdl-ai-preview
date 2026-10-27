@@ -180,6 +180,18 @@ class IndependentLearningTests(unittest.TestCase):
         app.radio(key="compass_page").set_value("공부하기").run()
         self.assertFalse(app.exception,[str(e.message) for e in app.exception])
         self.assertTrue(any("공부 방법 골라보기" in x.label for x in app.expander))
+        app.selectbox(key="study_self_strategy").set_value("compare").run()
+        self.assertFalse(app.exception,[str(e.message) for e in app.exception])
+        app.button(key="study_self_start").click().run()
+        self.assertFalse(app.exception,[str(e.message) for e in app.exception])
+        self.assertTrue(any("직접 해 보기" in str(x.value) for x in app.markdown))
+        con=connect()
+        found=con.execute("""SELECT choice_source,strategy_id FROM compass_strategy_choices
+            WHERE owner='S11' ORDER BY created DESC LIMIT 1""").fetchone()
+        con.close()
+        self.assertIsNotNone(found)
+        self.assertEqual("student",found["choice_source"])
+        self.assertEqual("compare",found["strategy_id"])
 
 
 if __name__=="__main__":
