@@ -19,7 +19,8 @@ jobs:
       - name: Unit tests and syntax
         run: |
           python -m unittest discover -s tests -p 'test_ai_upgrade.py' -v
-          python -m py_compile ai_preview_app.py sdl_upgrade/*.py
+          python -m py_compile ai_preview_app.py compass_*.py sdl_upgrade/*.py
+          python -m unittest discover -s tests -p 'test_compass.py' -v
       - name: Render Streamlit view
         run: |
           python - <<'PY'
@@ -27,8 +28,9 @@ jobs:
           test = AppTest.from_file("ai_preview_app.py",default_timeout=30).run()
           problems = [getattr(e, "message", str(e)) for e in test.exception]
           assert not problems, problems
-          assert len(test.tabs) == 3, len(test.tabs)
-          print("All three learning screens rendered successfully")
+          pages = [x for x in test.radio if x.key == "compass_page"]
+          assert pages and list(pages[0].options) == ["오늘","목표와 계획","공부하기","학습일지","내 기록"]
+          print("Compass home and five navigation choices render successfully")
           PY
       - name: Start Streamlit server
         run: |
