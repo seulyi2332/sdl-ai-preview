@@ -5,6 +5,7 @@ import streamlit as st
 from sdl_upgrade.journal import analyze_diary
 from sdl_upgrade.model_client import safe_error_message
 from compass_store import all_rows,ident,now
+from compass_progress import criterion_for,time_summaries,adjustments
 
 CATEGORY={
   "studied":"오늘 배운 것","well":"잘된 점","difficult":"어려웠던 점",
@@ -46,6 +47,25 @@ def journal_form(db,owner,client,model):
             for r in recent:
                 st.caption(f"● {r['course'] or '교과목 미정'} · {r['topic'] or '자유 학습'}")
                 st.write(r["strategy"])
+    with st.expander("📎 성찰에 참고할 내 학습기록 · 필요할 때 펼치기",expanded=False):
+        examples=all_rows(db,"""SELECT m.kind,m.text,d.title FROM compass_marks m
+           JOIN compass_materials d ON d.id=m.material_id AND d.owner=m.owner
+           WHERE m.owner=? AND m.state='active' ORDER BY m.created DESC LIMIT 4""",(owner,))
+        times=time_summaries(db,owner,limit=3)
+        if not examples and not times:
+            st.caption("기록이 없어도 일기를 자유롭게 쓸 수 있어요.")
+        for m in examples:
+            st.caption("● 내가 표시한 "+m["kind"]+" · "+m["title"])
+            st.write(m["text"][:350])
+        if times:
+            st.markdown("**내가 기록한 계획시간과 실제시간**")
+            for row in times:
+                estimate="미입력" if row["estimated"] is None else str(row["estimated"])+"분"
+                actual="미입력" if row["actual"] is None else str(row["actual"])+"분"
+                st.write(f"- {row['title']}: 예상 {estimate}, 실제 {actual}")
+                if row["reason"]:
+                    st.caption("내가 생각한 이유: "+row["reason"])
+        st.caption("이 기록은 참고자료예요. 학습일지에 무엇을 쓸지는 내가 결정해요.")
     text=st.text_area("오늘의 공부 이야기",key="diary_story",height=210,
       placeholder="오늘 무엇을 공부했나요?\n어떤 부분이 도움이 됐고 무엇이 어려웠나요?\n흥미로웠던 주제나 다음에 해 보고 싶은 공부가 있다면 편하게 적어 보세요.")
     if st.button("AI에게 오늘의 브리핑 부탁하기",key="diary_analyze",type="primary"):
@@ -157,6 +177,14 @@ def selfcheck(db,owner):
         return
     options={g["id"]:g["title"] for g in goals}
     goal_id=st.selectbox("돌아볼 목표",list(options),format_func=lambda x:options[x],key="selfcheck_goal")
+    criterion=criterion_for(db,owner,goal_id)
+    if criterion:
+        with st.container(border=True):
+            st.caption("내가 목표에 설정한 확인 기준")
+            st.write(criterion)
+            st.caption("실제 수행한 내용과 이 기준을 비교하여 스스로 평가해 주세요.")
+    else:
+        st.caption("목표의 도달 기준은 '목표와 계획'에서 직접 정할 수 있어요.")
     previous=all_rows(db,"SELECT * FROM compass_selfcheck WHERE owner=? AND goal_id=? ORDER BY created DESC LIMIT 2",
                       (owner,goal_id))
     if previous:
