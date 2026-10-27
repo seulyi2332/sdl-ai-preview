@@ -15,6 +15,7 @@ from compass_feedback import make_feedback
 from compass_strategy_cards import open_library
 from compass_major_links import study_exploration
 from compass_scaffold import render as render_scaffolding
+from compass_pdf_chat import start_pdf_chat, active_view as pdf_chat_view
 
 KIND_TIP={"어려움":"이해가 어렵거나 다시 보고 싶은 문장",
           "흥미":"관심이 가거나 더 알고 싶은 내용",
@@ -22,7 +23,7 @@ KIND_TIP={"어려움":"이해가 어렵거나 다시 보고 싶은 문장",
           "질문":"나중에 확인하거나 질문하고 싶은 내용"}
 
 
-def pdf_study(db,owner):
+def pdf_study(db,owner,client,model,course,topic):
     """Upload -> read actual PDF page image -> mark chosen extracted paragraph."""
     st.markdown("### 강의자료에서 공부하기")
     st.caption("PDF를 읽고 내가 어렵거나 흥미롭게 느낀 문장을 표시할 수 있어요. AI가 자동으로 흥미를 판정하지 않아요.")
@@ -124,16 +125,19 @@ def pdf_study(db,owner):
                 put_mark(db,owner,chosen,selected,kind,paragraph["text"],note)
                 st.session_state["study_chat_excerpt"]=paragraph["text"]
                 st.success("내가 선택한 문단을 '"+kind+"'로 저장했어요.")
-            if st.button("이 문단을 AI와 공부하기",key="study_to_chat"):
-                st.session_state["study_chat_excerpt"]=paragraph["text"]
-                if kind=="어려움":
-                    st.session_state["study_difficulty"]="PDF에서 선택한 이 문단을 이해하고 싶어요: "+paragraph["text"][:320]
-                    st.session_state["study_chat_question"]="이 문단이 어려워요. 핵심을 쉽게 설명하고 구체적인 예시를 들어 주세요."
-                elif kind=="흥미":
-                    st.session_state["study_chat_question"]="이 문단이 흥미로워요. 실제 적용 사례와 관심 전공에서의 연결을 설명해 주세요."
+            if st.button("이 문단을 AI와 공부하기",key="study_to_chat",type="primary"):
+                if not client:
+                    st.warning("AI API 키가 연결되지 않아 답변을 만들 수 없어요. PDF 선택은 유지돼요.")
                 else:
-                    st.session_state["study_chat_question"]="제가 선택한 문단을 내 말로 설명할 수 있게 사례를 보여 주세요."
-                st.success("선택한 문단을 공부 방법과 AI 대화에 연결했어요.")
+                    try:
+                        with st.spinner("선택한 문단과 내 메모를 AI가 읽고 답변하는 중이에요"):
+                            start_pdf_chat(db,owner,client,model,course,topic,chosen,
+                                           selected,paragraph["text"],kind,note)
+                        st.rerun()
+                    except Exception as exc:
+                        st.error("AI 답변을 받지 못했어요 · "+safe_error_message(exc))
+                        st.caption("문단과 메모는 그대로 있어요. 다시 시도할 수 있어요.")
+            pdf_chat_view(db,owner,client,model,course,topic,chosen,selected)
     return st.session_state.get("study_chat_excerpt") or ""
 
 
@@ -330,7 +334,7 @@ def study_view(db,owner,client,model):
     st.markdown("### 🌿 전공 및 진로 탐색")
     study_exploration(db,owner,client,model,course,topic)
     with st.expander("📚 내 학습자료 읽기, 연속 스크롤 및 드래그 표시",expanded=True):
-        excerpt=pdf_study(db,owner)
+        excerpt=pdf_study(db,owner,client,model,course,topic)
     st.divider()
     render_scaffolding(db,owner,client,model,course,topic,
                        st.session_state.get("study_chat_excerpt") or excerpt)
