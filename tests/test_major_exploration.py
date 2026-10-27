@@ -60,10 +60,15 @@ class MajorLinkTests(unittest.TestCase):
 class EmbeddedScreensTests(unittest.TestCase):
     def test_same_five_tabs_and_integrated_stage_prompts(self):
         from streamlit.testing.v1 import AppTest
+        conn=connect()
+        save_link(conn,"S09","심리학개론","기억","기억과 학습",
+                  "왜 기억이 달라지는지 궁금해요","심리학","전공에서 어떻게 연구할까요?")
+        conn.close()
         root=os.path.dirname(os.path.dirname(__file__))
         app=AppTest.from_file(os.path.join(root,"ai_preview_app.py"),default_timeout=65).run()
         app.text_input(key="participant_access_code").set_value("S09").run()
         self.assertFalse(app.exception,[str(e.message) for e in app.exception])
+        self.assertTrue(any("교과목에서 시작한 나의 전공" in str(m.value) for m in app.caption))
         nav=app.radio(key="compass_page")
         self.assertEqual(("오늘","목표와 계획","공부하기","학습일지","내 기록"),tuple(nav.options))
         app.radio(key="compass_page").set_value("목표와 계획").run()
