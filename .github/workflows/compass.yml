@@ -24,8 +24,13 @@ jobs:
       - name: Validate drag-select component JavaScript
         run: |
           python - <<'PY' > /tmp/compass-selection.mjs
-          from compass_pdf_selection import JS
-          print(JS)
+          import ast
+          with open("compass_pdf_selection.py",encoding="utf-8") as file:
+              module=ast.parse(file.read())
+          for node in module.body:
+              if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="JS" for t in node.targets):
+                  print(ast.literal_eval(node.value))
+                  break
           PY
           node --check /tmp/compass-selection.mjs
       - name: Test learning compass
