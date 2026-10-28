@@ -10,6 +10,7 @@ on:
       - dev/highlight-strategy-cards-20261027
       - dev/pdf-toolbar-hotfix-20261027
       - dev/major-career-exploration-20261027
+      - dev/major-career-exploration-20261027
   workflow_dispatch:
 jobs:
   compass:
@@ -45,6 +46,8 @@ jobs:
       - name: Test highlight keywords and 60 strategy cards
         run: python -m unittest discover -s tests -p 'test_compass_highlights_cards.py' -v
       - name: Test course-integrated major and career exploration
+        run: python -m unittest discover -s tests -p 'test_major_exploration.py' -v
+      - name: Test integrated major and career exploration
         run: python -m unittest discover -s tests -p 'test_major_exploration.py' -v
       - name: Test existing learning strategy/diary core
         run: python -m unittest discover -s tests -p 'test_ai_upgrade.py' -v
