@@ -6,7 +6,7 @@ recommendation or an aptitude/compatibility score.
 """
 import json
 import streamlit as st
-from compass_store import all_rows,ident,now,interest_for
+from compass_store import all_rows,ident,now,interest_for,add_task
 from sdl_upgrade.model_client import _response_text,safe_error_message
 
 
